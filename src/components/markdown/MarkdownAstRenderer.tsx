@@ -9,6 +9,7 @@ import type {
   Table as TableNode,
 } from 'mdast'
 import { CitationLink } from '../search/CitationLink.js'
+import { IconTaskChecked14, IconTaskUnchecked14 } from '../base/icons.js'
 import { CodeBlock } from './CodeBlock.js'
 import { ImageAsLink, Link } from './Link.js'
 import { InlineMath, MathBlock } from './MathFormula.js'
@@ -31,8 +32,14 @@ const List = memo(function List({ node, loading }: { node: ListNode; loading: bo
         return (
           <li key={index} className={isTaskItem ? 'ds-markdown-task-list-item' : undefined}>
             {isTaskItem ? (
-              // □ U+25A1 / ☑ U+2611
-              <span className="ds-markdown-task-checkbox">{checked ? '☑  ' : '□  '}</span>
+              <span
+                className="ds-markdown-task-checkbox"
+                role="checkbox"
+                aria-checked={checked}
+                aria-disabled
+              >
+                {checked ? <IconTaskChecked14 /> : <IconTaskUnchecked14 />}
+              </span>
             ) : null}
             <MarkdownBlockContentOrDefinitionContent nodes={child.children} loading={loading} />
           </li>

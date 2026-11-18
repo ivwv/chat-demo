@@ -563,3 +563,24 @@ export const IconPromptOutline16 = () => (
     />
   </svg>
 )
+
+/** Markdown 任务列表：未勾选的空方框，14×14 与行内文字对齐 */
+export const IconTaskUnchecked14 = () => (
+  <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x={2} y={2} width={10} height={10} rx={2} stroke="currentColor" strokeWidth={1.3} />
+  </svg>
+)
+
+/** Markdown 任务列表：已勾选的方框 + 勾 */
+export const IconTaskChecked14 = () => (
+  <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x={2} y={2} width={10} height={10} rx={2} stroke="currentColor" strokeWidth={1.3} />
+    <path
+      d="M4.3 7.1L6.2 8.95L9.9 5.05"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
