@@ -21,6 +21,11 @@ export const MAX_USER_DATA_SIZE_MB = 32
 export const MAX_INLINE_IMAGE_MB = 8
 /** 单个文本附件拼进上下文的最大字符数，超出部分截断并注明 */
 export const MAX_INLINE_TEXT_CHARS = 200_000
+/**
+ * 粘贴内容超过这个 token 估算值就转成附件，避免一大坨文本把输入框和消息挤满；
+ * 附件卡片上能看到 token 数，也可以随时还原成普通文本。
+ */
+export const PASTE_AS_FILE_TOKENS = 1200
 export const MAX_COUNT = 50
 /** 同时上传的文件数 */
 const MAX_CONCURRENT = 3

@@ -199,6 +199,48 @@ export const zh = {
   thinkingSwitch: '深度思考',
   modelSelectorLabel: '选择模型',
   modelSelectorPlaceholder: '选择模型',
+  modelSearchPlaceholder: '搜索模型或服务商',
+  modelSearchEmpty: '没有匹配的模型',
+  promptLabel: '提示词',
+  promptNone: '默认（不使用预设）',
+  promptHint: '预设会作为系统提示词随每次请求发送；自定义提示词在「设置 › 通用」里改',
+  promptGeneralName: '通用助手',
+  promptGeneralContent:
+    '你是一位严谨、务实的助手。先直接回答，再补充必要的解释；不确定时说明不确定，不编造事实。',
+  promptCodeName: '代码专家',
+  promptCodeContent:
+    '你是一位资深软件工程师。回答以可运行的代码为主，先给结论再解释关键实现，并指出边界条件、兼容性与潜在风险。',
+  promptReviewName: '代码审查',
+  promptReviewContent:
+    '你是一位严格的代码审查者。按严重程度列出问题，指出具体位置与原因，并给出可执行的修改建议；没有问题就直说。',
+  promptExplainName: '概念讲解',
+  promptExplainContent:
+    '你是一位善于用类比解释的老师。先用一句话给出结论，再分步骤讲清原理，最后给一个具体例子。',
+  promptTranslateName: '翻译',
+  promptTranslateContent:
+    '你是一位专业译者。保持原文语气与术语一致，只输出译文；无法直译的表达用括注补充。',
+  promptPolishName: '文案润色',
+  promptPolishContent:
+    '你是一位中文编辑。在不改变事实与结构的前提下精简冗余、统一术语、修正语病，输出润色后的全文。',
+  promptSummarizeName: '要点总结',
+  promptSummarizeContent:
+    '你是一位信息整理专家。把输入压缩成要点清单，保留数字与专有名词，不添加输入中没有的信息。',
+  pastedTextName: '粘贴内容',
+  pasteAsFile: '粘贴原文至输入框',
+  fileLineCount: '{count} 行',
+  fileTokenCount: '约 {count} tokens',
+  fileExpandText: '展开原文',
+  fileCollapseText: '收起原文',
+  messageStatInput: '输入 {count}',
+  messageStatOutput: '输出 {count}',
+  messageStatReasoning: '思考 {count}',
+  messageStatCache: '缓存 {count}',
+  messageStatSpeed: '{speed} tok/s',
+  messageStatDuration: '用时 {seconds}s',
+  messageStatTitle:
+    '模型 {model}\n输入 {input} · 输出 {output}\n缓存读取 {cacheRead} · 缓存写入 {cacheWrite}\n用时 {seconds} 秒 · 平均 {speed} tok/s',
+  sessionUsage: '本会话 {count} tokens',
+  sessionUsageTitle: '输入 {input} · 输出 {output} · 缓存 {cache}',
   deactivatedSearchTooltip: '按需搜索网页',
   search: '智能搜索',
   uploadFile: '上传文件',

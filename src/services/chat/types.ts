@@ -74,6 +74,8 @@ export type AssistantMessage = MessageBranch & {
   id: string
   role: 'assistant'
   createdAt: number
+  /** 收尾（完成/停止/出错）时间，用于算吐字速度；历史数据缺省时不显示速度 */
+  finishedAt?: number
   /** 未记录模型时为 null，续写使用当前默认模型。 */
   model: string | null
   /** 生成该回答的服务商；导入的历史数据没有该字段，续写时退回当前选择 */

@@ -50,16 +50,63 @@
   position: fixed;
   z-index: 1050;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   overscroll-behavior: contain;
-  width: 268px;
+  width: 288px;
   max-width: calc(100vw - 16px);
   padding: 6px;
-  overflow-y: auto;
+  overflow: hidden;
   border-radius: 14px;
   background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
   box-shadow:
     inset 0 0 0 1px var(--dsw-alias-border-inverted),
     0 12px 32px 0 rgba(0, 0, 0, 0.12);
+}
+
+.search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 2px 6px;
+  padding: 0 10px;
+  height: 32px;
+  border-radius: 10px;
+  background-color: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+
+  &::placeholder {
+    color: var(--dsw-alias-label-tertiary);
+  }
+}
+
+.list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.empty {
+  padding: 14px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
 }
 
 .group {
@@ -108,10 +155,26 @@
   color: var(--dsw-alias-brand-text);
 }
 
+/* 键盘上下键移动时的当前项，与鼠标悬停保持一致 */
+.optionActive {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
 .optionLabel {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionHint {
+  flex-shrink: 0;
+  max-width: 96px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

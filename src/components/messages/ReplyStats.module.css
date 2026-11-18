@@ -1,0 +1,7 @@
+.stats {
+  margin: -4px 0 12px -6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  user-select: none;
+}

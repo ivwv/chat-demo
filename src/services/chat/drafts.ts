@@ -105,6 +105,23 @@ export const retryDraftAttachment = (
   }
 }
 
+/**
+ * 把附件还原成普通输入内容：读出文本、移除附件，由调用方插回输入框。
+ * 用于「粘贴原文至输入框」，让大段文本可以继续编辑而不是永远当附件。
+ */
+export const expandDraftAttachment = async (
+  sessionId: string | null,
+  attachmentId: string
+): Promise<string | null> => {
+  const attachment = getDraft(sessionId).attachments.find((item) => item.id === attachmentId)
+  if (!attachment) {
+    return null
+  }
+  const text = await attachment.file.text()
+  removeDraftAttachment(sessionId, attachmentId)
+  return text
+}
+
 /** 发送按钮和实际提交共用规则：有内容，且需要上传的附件都已成功。 */
 export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
   const text = draft.text.trim()

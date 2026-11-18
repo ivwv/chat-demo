@@ -167,6 +167,8 @@ export const settleReply = (
   ...reply,
   status,
   error,
+  // 续写会在开始新一轮时清掉，这里只在首次收尾时记录
+  finishedAt: reply.finishedAt ?? now,
   blocks: reply.blocks.flatMap((block): ReplyBlock[] => {
     if (reply.stopReason === 'refusal' && (block.type === 'thinking' || block.type === 'text')) {
       return []

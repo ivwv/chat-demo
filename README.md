@@ -29,10 +29,12 @@ The output is written to `dist/`. Deploy it to a static web server or open `dist
 
 ## Features
 
-- Multiple providers and models: each provider holds any number of models, switched with a two-level picker in the composer and editable at any time.
+- Multiple providers and models: each provider holds any number of models, switched with a two-level picker in the composer and searchable by fuzzy match.
+- Prompt presets: switch them next to the search toggle; the selected preset is sent as the system prompt.
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
 - Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
-- Images and text files are sent inline with the message, so they work across providers; voice input and read-aloud follow the selected provider's capabilities.
+- Images and text files are sent inline with the message, so they work across providers; large pastes collapse into a placeholder card that can be restored or previewed.
+- Every reply reports token usage and throughput, and the header shows the running total for the current branch.
 - Markdown, syntax highlighting, KaTeX math, and Mermaid diagrams.
 - Simplified Chinese and English, light and dark themes, mobile layouts, location settings, and chat history import and export.
 
@@ -58,6 +60,13 @@ Model capabilities (vision, thinking, search) are inferred from the model name a
 - Images are inlined as base64 (OpenAI `image_url` data URL, Anthropic `source.type: base64`), up to 8 MB, PNG / JPG / GIF / WebP.
 - Text-like files (`.txt`, `.md`, `.csv`, code…) are read as text and folded into the message; anything over 200k characters is truncated.
 - PDF, Word, PowerPoint and Excel cannot be inlined. Only providers with file API upload enabled accept them; others reject the file with a clear reason.
+
+## Prompts and usage
+
+- The prompt picker next to the search toggle switches between 7 built-in presets; the selection is sent as the system prompt. Resolution order: preset → custom system prompt (Settings › General) → generated from the provider name.
+- Pasting text over roughly 1200 tokens turns it into a text attachment with a token estimate; "Paste text into the box" restores it as editable content.
+- Large content already sent stays collapsible too: "Show full text" expands it in place, or click the card to preview it in a dialog.
+- Each reply shows input / output / cached / reasoning tokens and average throughput; hover for the full breakdown. The header shows the running total for the current branch. All numbers come from the provider's `usage`; nothing is estimated.
 
 ## Data and storage
 

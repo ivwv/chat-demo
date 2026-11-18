@@ -215,6 +215,49 @@ export const en = {
   thinkingSwitch: 'DeepThink',
   modelSelectorLabel: 'Select model',
   modelSelectorPlaceholder: 'Select model',
+  modelSearchPlaceholder: 'Search models or providers',
+  modelSearchEmpty: 'No matching model',
+  promptLabel: 'Prompt',
+  promptNone: 'Default (no preset)',
+  promptHint:
+    'The preset is sent as the system prompt with every request. Edit your own prompt in Settings › General.',
+  promptGeneralName: 'General',
+  promptGeneralContent:
+    'You are a rigorous, practical assistant. Answer first, then add the necessary explanation; say when you are unsure instead of inventing facts.',
+  promptCodeName: 'Code',
+  promptCodeContent:
+    'You are a senior software engineer. Lead with runnable code, explain the key implementation after the conclusion, and call out edge cases, compatibility and risks.',
+  promptReviewName: 'Review',
+  promptReviewContent:
+    'You are a strict code reviewer. List issues by severity with the exact location and reason, then give an actionable fix; say so plainly when nothing is wrong.',
+  promptExplainName: 'Explain',
+  promptExplainContent:
+    'You are a teacher who explains with analogies. State the conclusion in one sentence, explain the principle step by step, and finish with a concrete example.',
+  promptTranslateName: 'Translate',
+  promptTranslateContent:
+    'You are a professional translator. Keep the tone and terminology consistent and output only the translation; gloss expressions that cannot be translated directly.',
+  promptPolishName: 'Polish',
+  promptPolishContent:
+    'You are an editor. Without changing facts or structure, remove redundancy, unify terminology and fix grammar, then output the full polished text.',
+  promptSummarizeName: 'Summarize',
+  promptSummarizeContent:
+    'You are an information organizer. Compress the input into bullet points, keep numbers and proper nouns, and never add facts that are not in the input.',
+  pastedTextName: 'Pasted text',
+  pasteAsFile: 'Paste text into the box',
+  fileLineCount: '{count} lines',
+  fileTokenCount: '~{count} tokens',
+  fileExpandText: 'Show full text',
+  fileCollapseText: 'Collapse',
+  messageStatInput: 'in {count}',
+  messageStatOutput: 'out {count}',
+  messageStatReasoning: 'reasoning {count}',
+  messageStatCache: 'cached {count}',
+  messageStatSpeed: '{speed} tok/s',
+  messageStatDuration: 'took {seconds}s',
+  messageStatTitle:
+    'Model {model}\nInput {input} · Output {output}\nCache read {cacheRead} · Cache write {cacheWrite}\nTook {seconds}s · {speed} tok/s average',
+  sessionUsage: '{count} tokens in this chat',
+  sessionUsageTitle: 'Input {input} · Output {output} · Cached {cache}',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
   uploadFile: 'Upload files',

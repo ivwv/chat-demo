@@ -547,3 +547,19 @@ export const IconPlusOutline14 = () => (
     />
   </svg>
 )
+
+/** 提示词预设：几行文本 + 一点强调，用于输入框底部的切换入口 */
+export const IconPromptOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2.4 4.3h11.2M2.4 8.3h7.2M2.4 12.3h5.2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <path
+      d="M12.1 8.4l.62 1.4 1.4.62-1.4.62-.62 1.4-.62-1.4-1.4-.62 1.4-.62.62-1.4z"
+      fill="currentColor"
+    />
+  </svg>
+)

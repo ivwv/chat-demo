@@ -14,6 +14,7 @@ import {
 } from '../attachments.js'
 import { getActiveSelection, resolveSelection } from '../providers/store.js'
 import { getModelCapabilities, type ModelConfig, type ProviderConfig } from '../providers/types.js'
+import { getPromptContent } from '../prompts.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -44,12 +45,17 @@ import {
 } from './types.js'
 
 /**
- * 所有生成请求统一携带的助手身份说明：设置里填了就照用，
- * 留空时按当前服务商生成，避免把 DeepSeek 的身份按到别家模型上。
+ * 所有生成请求统一携带的助手身份说明，优先级：
+ * 选中的提示词预设 → 设置里的自定义说明 → 按当前服务商生成。
  */
-const buildSystemPrompt = (provider: ProviderConfig) =>
-  useSettings.getState().systemPrompt.trim() ||
-  translate('systemPromptDefault', { name: provider.name })
+const buildSystemPrompt = (provider: ProviderConfig) => {
+  const { promptId, systemPrompt } = useSettings.getState()
+  return (
+    getPromptContent(promptId) ||
+    systemPrompt.trim() ||
+    translate('systemPromptDefault', { name: provider.name })
+  )
+}
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
@@ -735,6 +741,8 @@ export const continueReply = (sessionId: string, messageId: string) => {
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
+    // 续写是新一轮请求，用时按这一轮重新计
+    finishedAt: undefined,
     stopReason: undefined,
     stopDetails: undefined,
     error: undefined,
@@ -765,7 +773,7 @@ export const retryUpload = (sessionId: string, messageId: string) => {
   ) {
     return
   }
-  const reply: AssistantMessage = { ...previous, status: 'pending', error: undefined }
+  const reply: AssistantMessage = { ...previous, status: 'pending', finishedAt: undefined, error: undefined }
   updateReply(sessionId, reply)
   persist(sessionId)
   void streamReply(sessionId, reply, { history: path.slice(0, index - 1), question })

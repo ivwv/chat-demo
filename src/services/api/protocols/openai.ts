@@ -119,12 +119,24 @@ const toUsage = (value: unknown): MessageUsage | undefined => {
   if (!isRecord(value)) {
     return undefined
   }
-  return {
+  const promptDetails = isRecord(value.prompt_tokens_details) ? value.prompt_tokens_details : null
+  const completionDetails = isRecord(value.completion_tokens_details)
+    ? value.completion_tokens_details
+    : null
+  const usage: MessageUsage = {
     input_tokens: number(value.prompt_tokens ?? value.input_tokens),
-    cache_creation_input_tokens: 0,
-    cache_read_input_tokens: 0,
+    // OpenAI 走 prompt_tokens_details.cached_tokens，DeepSeek 走 prompt_cache_hit_tokens
+    cache_read_input_tokens: number(
+      promptDetails?.cached_tokens ?? value.prompt_cache_hit_tokens
+    ),
+    cache_creation_input_tokens: number(promptDetails?.cache_write_tokens),
     output_tokens: number(value.completion_tokens ?? value.output_tokens),
   }
+  const reasoning = number(completionDetails?.reasoning_tokens)
+  if (reasoning > 0) {
+    usage.reasoning_tokens = reasoning
+  }
+  return usage
 }
 
 const buildBody = (provider: ProviderConfig, model: string, req: ChatRequest) => ({

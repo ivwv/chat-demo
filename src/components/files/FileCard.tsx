@@ -10,12 +10,15 @@ import styles from './FileCard.module.css'
  * 文档文件卡片：图标 + 文件名 + 「扩展名 大小」或状态文案。
  * 输入框内失败时描边和说明标红；可重试时显示刷新图标，不可重试时常显红色删除按钮。
  * 消息里的不可重试文件保留普通边框和状态说明。
+ * extra 追加在元信息后（如 token 估算），hint 是卡片下方的一行文字按钮（如「粘贴原文至输入框」）。
  */
 export const FileCard = ({
   name,
   size,
   status = 'done',
   error,
+  extra,
+  hint,
   onRetry,
   onRemove,
   onOpen,
@@ -24,6 +27,8 @@ export const FileCard = ({
   size: number
   status?: 'uploading' | 'done' | 'error'
   error?: string
+  extra?: string
+  hint?: { label: string; onClick: () => void }
   onRetry?: () => void
   onRemove?: () => void
   onOpen?: () => void
@@ -31,7 +36,7 @@ export const FileCard = ({
   const t = useTranslate()
   const ext = getExtension(name)
   let icon: ReactNode = <FileIcon ext={ext} />
-  let description = [ext, formatSize(size)].filter(Boolean).join(' ')
+  let description = [ext, formatSize(size), extra].filter(Boolean).join(' · ')
   if (status === 'uploading') {
     icon = <span className={styles.spinner} />
     description = t('uploadFileStatusUploading')
@@ -64,6 +69,18 @@ export const FileCard = ({
       <div className={styles.content}>
         <div className={styles.caption}>{name}</div>
         <div className={styles.subCaption}>{description}</div>
+        {hint ? (
+          <button
+            type="button"
+            className={styles.hint}
+            onClick={(event) => {
+              event.stopPropagation()
+              hint.onClick()
+            }}
+          >
+            {hint.label}
+          </button>
+        ) : null}
       </div>
       {onRemove ? (
         <button

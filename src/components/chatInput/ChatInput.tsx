@@ -13,6 +13,7 @@ import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.
 import {
   addDraftFiles,
   EMPTY_DRAFT,
+  expandDraftAttachment,
   getDraft,
   prepareDraftMessage,
   removeDraftAttachment,
@@ -28,19 +29,38 @@ import { ensureProvider } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { ModelPicker } from './ModelPicker.js'
 import { showToast } from '../base/toastState.js'
-import { ACCEPT, useUploads } from '../../services/attachments.js'
+import { ACCEPT, PASTE_AS_FILE_TOKENS, useUploads } from '../../services/attachments.js'
+import { estimateTokens } from '../../utils/tokens.js'
 import { DraftAttachments } from './DraftAttachments.js'
+import { PromptPicker } from './PromptPicker.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.css'
 
-/** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
+/** 输入框：自适应高度的文本框 + 文件 + 深度思考、智能搜索与提示词切换 + 语音输入 + 发送 / 停止 */
 export const ChatInput = memo(function ChatInput({ sessionId }: { sessionId: string | null }) {
   // 切换目标时释放录音、转写和 DOM 状态；文字与附件由草稿服务保留。
   return <Input key={sessionId === null ? 'new' : `session:${sessionId}`} sessionId={sessionId} />
 })
+
+/** 用首行给粘贴内容起个像文件的名字，方便在附件卡片上认出来 */
+const pasteFileName = (text: string, fallback: string) => {
+  const firstLine =
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? ''
+  const name = firstLine
+    .replace(/^[#>\-*\s]+/, '')
+    .replace(/[*_`]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .trim()
+  const chars = [...name]
+  const label = chars.length > 24 ? chars.slice(0, 24).join('') : name
+  return `${label || fallback}.txt`
+}
 
 const Input = ({ sessionId }: { sessionId: string | null }) => {
   const t = useTranslate()
@@ -95,6 +115,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       showToast(error)
     }
   }
+  /** 大段粘贴转成文本附件：输入框只留一个带 token 数的卡片，随时可以还原 */
+  const acceptPastedText = (text: string) => {
+    acceptFiles([new File([text], pasteFileName(text, t('pastedTextName')), { type: 'text/plain' })])
+  }
   const retryFile = useCallback(
     (id: string) => {
       const provider = getActiveProvider()
@@ -109,6 +133,25 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       if (!useChatStore.getState().importingHistory) {
         removeDraftAttachment(sessionId, id)
       }
+    },
+    [sessionId]
+  )
+  /** 把文本附件还原成输入框里的普通文字，光标落在插入内容之后 */
+  const expandFile = useCallback(
+    async (id: string) => {
+      const text = await expandDraftAttachment(sessionId, id)
+      if (text === null) {
+        return
+      }
+      const textarea = textareaRef.current
+      const current = getDraft(sessionId).text
+      const start = textarea?.selectionStart ?? current.length
+      const end = textarea?.selectionEnd ?? current.length
+      setDraftText(sessionId, current.slice(0, start) + text + current.slice(end))
+      requestAnimationFrame(() => {
+        textarea?.focus({ preventScroll: true })
+        textarea?.setSelectionRange(start + text.length, start + text.length)
+      })
     },
     [sessionId]
   )
@@ -174,7 +217,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         }
       }}
     >
-      <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
+      <DraftAttachments
+        items={attachments}
+        onRetry={retryFile}
+        onRemove={removeFile}
+        onExpand={expandFile}
+      />
       <div className={styles.textareaWrapper}>
         <textarea
           ref={textareaRef}
@@ -204,6 +252,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             if (files.length > 0) {
               event.preventDefault()
               acceptFiles(files)
+              return
+            }
+            const text = event.clipboardData.getData('text/plain')
+            if (estimateTokens(text) >= PASTE_AS_FILE_TOKENS) {
+              event.preventDefault()
+              acceptPastedText(text)
             }
           }}
         />
@@ -244,6 +298,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               <span className={styles.toggleLabel}>{t('search')}</span>
             </button>
           </Tooltip>
+          <PromptPicker labelClassName={styles.toggleLabel} />
         </div>
         <div className={styles.right}>
           {canVoice ? (
