@@ -58,7 +58,7 @@ Model capabilities (vision, thinking, search) are inferred from the model name a
 ## Attachments
 
 - Images are inlined as base64 (OpenAI `image_url` data URL, Anthropic `source.type: base64`), up to 8 MB, PNG / JPG / GIF / WebP.
-- Text-like files (`.txt`, `.md`, `.csv`, code…) are read as text and folded into the message; anything over 200k characters is truncated.
+- Text-like files (`.txt`, `.md`, `.csv`, code…) are read as text and folded into the message with **no truncation**: the card shows a token estimate so you can decide how much to send based on the running total.
 - PDF, Word, PowerPoint and Excel cannot be inlined. Only providers with file API upload enabled accept them; others reject the file with a clear reason.
 
 ## Prompts and usage

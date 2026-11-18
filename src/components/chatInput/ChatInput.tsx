@@ -45,7 +45,10 @@ export const ChatInput = memo(function ChatInput({ sessionId }: { sessionId: str
   return <Input key={sessionId === null ? 'new' : `session:${sessionId}`} sessionId={sessionId} />
 })
 
-/** 用首行给粘贴内容起个像文件的名字，方便在附件卡片上认出来 */
+/**
+ * 用首行给粘贴内容起个像文件的名字，方便在附件卡片上认出来。
+ * 只取第一行并去掉 Markdown 标记，不对内容做字数截断——卡片上的省略号只是显示效果。
+ */
 const pasteFileName = (text: string, fallback: string) => {
   const firstLine =
     text
@@ -57,9 +60,7 @@ const pasteFileName = (text: string, fallback: string) => {
     .replace(/[*_`]/g, '')
     .replace(/[\\/:*?"<>|]/g, '')
     .trim()
-  const chars = [...name]
-  const label = chars.length > 24 ? chars.slice(0, 24).join('') : name
-  return `${label || fallback}.txt`
+  return `${name || fallback}.txt`
 }
 
 const Input = ({ sessionId }: { sessionId: string | null }) => {

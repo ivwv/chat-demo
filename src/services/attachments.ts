@@ -19,8 +19,6 @@ export const MAX_USER_DATA_SIZE_MB = 32
  * 比文件接口的额度卡得更紧。
  */
 export const MAX_INLINE_IMAGE_MB = 8
-/** 单个文本附件拼进上下文的最大字符数，超出部分截断并注明 */
-export const MAX_INLINE_TEXT_CHARS = 200_000
 /**
  * 粘贴内容超过这个 token 估算值就转成附件，避免一大坨文本把输入框和消息挤满；
  * 附件卡片上能看到 token 数，也可以随时还原成普通文本。
@@ -349,7 +347,8 @@ const readBase64 = (blob: Blob) =>
   })
 
 /**
- * 把原件读成请求里的内联形态：图片转 base64，文本读成字符串（过长时截断）。
+ * 把原件读成请求里的内联形态：图片转 base64，文本读成字符串。
+ * 文本一律原样返回，不做任何截断——发多少由用户按卡片上的 token 估算自己决定。
  * 二进制文档返回 null，由调用方按服务商能力拦下，不做假支持。
  */
 export const toInlineAttachment = async (
@@ -365,14 +364,7 @@ export const toInlineAttachment = async (
   if (kind === 'image') {
     return { kind: 'image', mediaType: mimeType, data: await readBase64(blob) }
   }
-  const text = await blob.text()
-  return {
-    kind: 'text',
-    text:
-      text.length > MAX_INLINE_TEXT_CHARS
-        ? `${text.slice(0, MAX_INLINE_TEXT_CHARS)}\n\n[内容过长，已截断]`
-        : text,
-  }
+  return { kind: 'text', text: await blob.text() }
 }
 
 /** 文件扩展名（大写），用于卡片元信息 */

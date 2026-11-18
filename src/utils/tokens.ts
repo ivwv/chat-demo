@@ -2,13 +2,20 @@
  * token 估算：CJK 约 1 字 1 token，其余按 3.5 字符 1 token。
  * 只用于界面上提示「大概多长」，真实用量以服务端返回的 usage 为准。
  */
-const CJK_PATTERN = /[\u2e80-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/g
+const isCjk = (code: number) =>
+  (code >= 0x2e80 && code <= 0x9fff) ||
+  (code >= 0xf900 && code <= 0xfaff) ||
+  (code >= 0x3040 && code <= 0x30ff) ||
+  (code >= 0xac00 && code <= 0xd7af)
 
 export const estimateTokens = (text: string): number => {
-  if (!text) {
-    return 0
+  let cjk = 0
+  // 逐字符统计而不是正则匹配：大文本不会一次产生几十万个 match 对象
+  for (let i = 0; i < text.length; i++) {
+    if (isCjk(text.charCodeAt(i))) {
+      cjk++
+    }
   }
-  const cjk = text.match(CJK_PATTERN)?.length ?? 0
   return Math.ceil(cjk + (text.length - cjk) / 3.5)
 }
 

@@ -58,7 +58,7 @@ pnpm build
 ## 附件
 
 - 图片读成 base64 随消息内联（OpenAI 用 `image_url` 的 data URL，Anthropic 用 `source.type: base64`），上限 8MB，支持 PNG / JPG / GIF / WebP。
-- 文本类文件（`.txt`、`.md`、`.csv`、代码等）读成文本拼进消息，单份超过 20 万字符会截断。
+- 文本类文件（`.txt`、`.md`、`.csv`、代码等）读成文本拼进消息，**不做任何截断**：卡片上会给出 token 估算，发多少由你按当前会话的用量自己决定。
 - PDF、Word、PPT、Excel 等二进制文档无法内联，只有打开「文件接口上传」的服务商可以发送，其余会被拦下并提示原因。
 
 ## 提示词与用量

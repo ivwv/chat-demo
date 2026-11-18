@@ -63,12 +63,11 @@ const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-/** 服务端不生成标题时用首条提问截断，避免会话列表一直显示「新对话」 */
-const createLocalTitle = (text: string) => {
-  const title = text.replace(/\s+/g, ' ').trim()
-  const chars = [...title]
-  return chars.length > 24 ? `${chars.slice(0, 24).join('')}…` : title
-}
+/**
+ * 服务端不生成标题时用首条提问兜底，避免会话列表一直显示「新对话」。
+ * 只做空白折叠，不截断文字——侧边栏放不下时由界面省略号呈现。
+ */
+const createLocalTitle = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()

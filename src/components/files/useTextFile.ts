@@ -4,13 +4,20 @@ import { estimateTokens } from '../../utils/tokens.js'
 
 /**
  * 文本附件内容按附件 id 缓存：展开原文、预览、统计 token 都读同一份。
- * 上限 32 份，超出按插入顺序淘汰，避免长会话里堆积大量原文。
+ * 上限 32 份，超出按插入顺序淘汰；超长原文只缓存 token，避免整段常驻内存。
  */
 const CACHE_LIMIT = 32
+/** 超过这个字符数就不把原文留在内存里（不影响发送，仍会完整读取） */
+const CACHE_MAX_CHARS = 4_000_000
 const textCache = new Map<string, string>()
 const tokenCache = new Map<string, number>()
 
 const remember = (id: string, text: string) => {
+  tokenCache.set(id, estimateTokens(text))
+  if (text.length > CACHE_MAX_CHARS) {
+    textCache.delete(id)
+    return
+  }
   if (!textCache.has(id) && textCache.size >= CACHE_LIMIT) {
     const oldest = textCache.keys().next().value
     if (oldest !== undefined) {
@@ -19,7 +26,6 @@ const remember = (id: string, text: string) => {
     }
   }
   textCache.set(id, text)
-  tokenCache.set(id, estimateTokens(text))
 }
 
 const readText = async (id: string) => {
