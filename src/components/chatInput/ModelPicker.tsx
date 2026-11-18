@@ -47,6 +47,8 @@ export const ModelPicker = () => {
   const listRef = useRef<HTMLDivElement>(null)
   /** 当前高亮项，用于把它滚进可视区 */
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
+  /** 本次打开是否已完成「滚到选中项」的首次定位 */
+  const centeredRef = useRef(false)
   const { anchorRef, floatingRef, position } = useAnchoredPosition<
     HTMLButtonElement,
     HTMLDivElement
@@ -107,9 +109,14 @@ export const ModelPicker = () => {
     setActiveIndex(index >= 0 ? index : 0)
   }, [open, query, visible, activeKey])
 
-  // 高亮项不在可视区时滚到列表中间，长列表不必每次手动翻找
+  // 首次打开把选中项滚到列表中间；之后键盘移动只做最小滚动，避免列表大幅跳动
   useEffect(() => {
     if (!open) {
+      centeredRef.current = false
+      return
+    }
+    // 浮层还没完成定位时高度不可信，等 position 就绪再滚，避免先滚错再回弹
+    if (!position) {
       return
     }
     const frame = requestAnimationFrame(() => {
@@ -120,16 +127,33 @@ export const ModelPicker = () => {
       }
       const listRect = list.getBoundingClientRect()
       const itemRect = item.getBoundingClientRect()
-      if (itemRect.top < listRect.top || itemRect.bottom > listRect.bottom) {
+      if (!centeredRef.current) {
         list.scrollTop += itemRect.top - listRect.top - (listRect.height - itemRect.height) / 2
+        centeredRef.current = true
+        return
+      }
+      if (itemRect.top < listRect.top) {
+        list.scrollTop += itemRect.top - listRect.top
+      } else if (itemRect.bottom > listRect.bottom) {
+        list.scrollTop += itemRect.bottom - listRect.bottom
       }
     })
     return () => cancelAnimationFrame(frame)
-  }, [open, activeIndex])
+  }, [open, activeIndex, position])
+
+  // 输入关键词后列表内容整体变化，滚回顶部从第一条结果看起
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      return
+    }
+    const list = listRef.current
+    if (list) {
+      list.scrollTop = 0
+    }
+  }, [open, query])
 
   useEffect(() => {
     if (open) {
-      setQuery('')
       // 打开后直接可输入，省去一次点击
       requestAnimationFrame(() => inputRef.current?.focus())
     }
@@ -142,6 +166,22 @@ export const ModelPicker = () => {
   const select = (key: string) => {
     setActiveKey(key)
     setOpen(false)
+  }
+
+  /**
+   * 打开前同步归位：清空搜索并把高亮放到当前模型。
+   * 否则首次渲染会沿用上一次的 activeIndex（可能是搜索结果里的索引），
+   * 滚动 effect 先按错误位置滚一次，随后才被修正，表现为抖动。
+   */
+  const toggle = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    setQuery('')
+    const index = candidates.findIndex((item) => item.key === activeKey)
+    setActiveIndex(index >= 0 ? index : 0)
+    setOpen(true)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -178,7 +218,7 @@ export const ModelPicker = () => {
         title={fullModelTitle(activeModel.label, activeModel.id)}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
       >
         <span className={styles.triggerText}>{activeModel.label}</span>
         <span className={styles.arrow}>
