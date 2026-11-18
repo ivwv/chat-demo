@@ -4,13 +4,14 @@ import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import { IconCheckOutline16, IconPromptOutline16 } from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
-import { PROMPT_PRESETS, getPromptPreset } from '../../services/prompts.js'
+import { findPrompt, listPrompts, useCustomPrompts } from '../../services/prompts.js'
 import { setPromptId, useSettings } from '../../services/settings.js'
+import { openSettings } from '../settings/settingsDialogState.js'
 import styles from './PromptPicker.module.css'
 
 /**
  * 提示词切换：选中的预设会作为系统提示词随每次请求发送，
- * 与「深度思考」「智能搜索」并排放在输入框底部。
+ * 与「深度思考」「智能搜索」并排放在输入框底部。自定义提示词在「设置 › 提示词」里维护。
  */
 export const PromptPicker = ({
   labelClassName,
@@ -20,22 +21,17 @@ export const PromptPicker = ({
 }) => {
   const t = useTranslate()
   const promptId = useSettings((state) => state.promptId)
+  // 设置里增删改自定义提示词后，这里的列表要跟着变
+  useCustomPrompts((state) => state.prompts)
   const [open, setOpen] = useState(false)
   const { anchorRef, floatingRef, position } = useAnchoredPosition<
     HTMLButtonElement,
     HTMLDivElement
-  >(open, { side: 'top', align: 'start', maxHeight: 380, minSpace: 200 })
+  >(open, { side: 'top', align: 'start', maxHeight: 400, minSpace: 200 })
   useDismiss(open, [anchorRef, floatingRef], () => setOpen(false), { captureEscape: true })
 
-  const active = getPromptPreset(promptId)
-  const options = [
-    { id: '', name: t('promptNone'), content: '' },
-    ...PROMPT_PRESETS.map((preset) => ({
-      id: preset.id,
-      name: t(preset.nameKey),
-      content: t(preset.contentKey),
-    })),
-  ]
+  const active = findPrompt(promptId)
+  const options = [{ id: '', name: t('promptNone'), content: '', builtin: true }, ...listPrompts()]
 
   return (
     <>
@@ -49,11 +45,18 @@ export const PromptPicker = ({
         onClick={() => setOpen((value) => !value)}
       >
         <IconPromptOutline16 />
-        <span className={labelClassName ?? styles.label}>{active ? t(active.nameKey) : t('promptLabel')}</span>
+        <span className={labelClassName ?? styles.label}>
+          {active ? active.name : t('promptLabel')}
+        </span>
       </button>
       {open
         ? createPortal(
-            <div ref={floatingRef} className={styles.menu} style={position ?? undefined} role="menu">
+            <div
+              ref={floatingRef}
+              className={styles.menu}
+              style={position ?? undefined}
+              role="menu"
+            >
               <div className={styles.list}>
                 {options.map((option) => {
                   const selected = option.id === promptId
@@ -71,6 +74,9 @@ export const PromptPicker = ({
                     >
                       <span className={styles.optionHead}>
                         <span className={styles.optionName}>{option.name}</span>
+                        {option.builtin ? null : (
+                          <span className={styles.optionTag}>{t('promptCustomTag')}</span>
+                        )}
                         {selected ? <IconCheckOutline16 /> : null}
                       </span>
                       {option.content ? (
@@ -80,7 +86,16 @@ export const PromptPicker = ({
                   )
                 })}
               </div>
-              <div className={styles.footer}>{t('promptHint')}</div>
+              <button
+                type="button"
+                className={styles.manage}
+                onClick={() => {
+                  setOpen(false)
+                  openSettings('prompts')
+                }}
+              >
+                {t('promptManage')}
+              </button>
             </div>,
             document.body
           )

@@ -63,7 +63,7 @@ Model capabilities (vision, thinking, search) are inferred from the model name a
 
 ## Prompts and usage
 
-- The prompt picker next to the search toggle switches between 7 built-in presets; the selection is sent as the system prompt. Resolution order: preset → custom system prompt (Settings › General) → generated from the provider name.
+- The prompt picker next to the search toggle switches between 7 built-in presets and your own prompts; the selection is sent as the system prompt. Settings › Prompts lets you create, edit and delete custom prompts — built-ins are read-only but can be duplicated. Resolution order: preset → custom system prompt (Settings › General) → generated from the provider name.
 - Pasting text over roughly 1200 tokens turns it into a text attachment with a token estimate; "Paste text into the box" restores it as editable content.
 - Large content already sent stays collapsible too: "Show full text" expands it in place, or click the card to preview it in a dialog.
 - Each reply shows input / output / cached / reasoning tokens and average throughput; hover for the full breakdown. The header shows the running total for the current branch. All numbers come from the provider's `usage`; nothing is estimated.

@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { hasUsableProvider } from '../../services/providers/store.js'
 
-/** 设置弹窗的分组：通用设置 / 服务商 / 数据管理 */
-export type SettingsSection = 'general' | 'providers' | 'data'
+/** 设置弹窗的分组：通用设置 / 提示词 / 服务商 / 数据管理 */
+export type SettingsSection = 'general' | 'prompts' | 'providers' | 'data'
 
 /** 设置弹窗：侧边栏底部、没有 API Key 时的操作与 401 提示都可以打开；section 为打开时选中的分组 */
 export const useSettingsDialog = create(() => ({
