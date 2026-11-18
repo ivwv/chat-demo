@@ -3,9 +3,16 @@ import { createId } from '../../utils/id.js'
 import { ApiError } from '../api/client.js'
 import { streamChat } from '../api/dispatch.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
-import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import {
+  cancelUpload,
+  describeUploadError,
+  getAttachmentKind,
+  toInlineAttachment,
+  uploadAttachment,
+  useUploads,
+} from '../attachments.js'
 import { getActiveSelection, resolveSelection } from '../providers/store.js'
-import { getModelCapabilities, type ProviderConfig } from '../providers/types.js'
+import { getModelCapabilities, type ModelConfig, type ProviderConfig } from '../providers/types.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -23,6 +30,7 @@ import {
   getContextRounds,
   settleReply,
   toRequestMessages,
+  type RequestAttachments,
 } from './reply.js'
 import {
   toSessionSummary,
@@ -103,6 +111,8 @@ const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
 /** 保存失败时保留原件，重试成功后才释放。 */
 const pendingFiles = new Map<string, db.StoredFile[]>()
+/** 刚发送、尚未写入 IndexedDB 的原件：请求可能早于落盘完成就开始读取 */
+const recentBlobs = new Map<string, Blob>()
 const deletingSessions = new Set<string>()
 const deletionTasks = new Set<Promise<boolean>>()
 const streamFlushes = new Map<string, () => void>()
@@ -190,6 +200,7 @@ const persist = (sessionId: string) => {
         }
         if (pendingFiles.get(sessionId) === files) {
           pendingFiles.delete(sessionId)
+          files?.forEach((file) => recentBlobs.delete(file.id))
         }
         if (getSession(sessionId) === session) {
           unsavedSessions.delete(sessionId)
@@ -418,6 +429,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     sessionAccess.clear()
     unsavedSessions.clear()
     pendingFiles.clear()
+    recentBlobs.clear()
     clearAllDrafts()
     set({
       ready: true,
@@ -610,6 +622,8 @@ export const sendMessage = (targetSessionId: string | null) => {
       ...(pendingFiles.get(sessionId) ?? []),
       ...files.map(({ id, blob }) => ({ id, blob })),
     ])
+    // 请求可能在 saveSession 完成前就开始读原件，先放进内存兜底
+    files.forEach(({ id, blob }) => recentBlobs.set(id, blob))
   }
   persist(sessionId)
   clearSentDraft(targetSessionId)
@@ -753,6 +767,12 @@ export const retryUpload = (sessionId: string, messageId: string) => {
 
 type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage }
 
+/** 附件补齐后的请求：内联模式带回读出的原件内容，filesApi 模式只改 serverId */
+type PreparedRequest = { request: Request; attachments: RequestAttachments }
+
+/** 附件原件的读取入口：刚发送的走内存，其余回落到 IndexedDB */
+const loadAttachmentBlob = async (id: string) => recentBlobs.get(id) ?? db.loadFile(id)
+
 /** 把补传得到的 serverId 写回会话里所有引用同一附件的消息（编辑、重新生成会共用附件） */
 const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
   if (serverIds.size === 0) {
@@ -813,12 +833,12 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
 }
 
 /**
- * 发送前补齐附件的 serverId。
+ * filesApi 模式：发送前补齐附件的 serverId。
  * - 本轮提问的附件并行补齐，任一失败则整体失败，已成功的照常写回，重试时复用成功结果；
- * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
+ * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的历史记录：从最新的消息往前逐张补传，
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
-const prepareFiles = async (
+const prepareServerFiles = async (
   sessionId: string,
   request: Request,
   provider: ProviderConfig,
@@ -828,9 +848,6 @@ const prepareFiles = async (
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
-  if (request.question.files.length > 0 && !provider.features?.filesApi) {
-    throw new ApiError('protocol', { key: 'replyAttachmentUnsupported' })
-  }
   const serverIds = new Map<string, string>()
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
@@ -886,6 +903,73 @@ const prepareFiles = async (
     prefix: request.prefix,
   }
 }
+
+/**
+ * 内联模式（默认）：把本次请求用到的原件读成 base64 / 文本，不依赖任何服务端文件接口。
+ * 本轮提问里的附件不支持时直接报错，让用户知道原因；历史轮次里的静默跳过，
+ * 不让一条旧附件卡住整轮对话。
+ */
+const resolveInlineAttachments = async (
+  request: Request,
+  provider: ProviderConfig,
+  model: ModelConfig,
+  signal: AbortSignal
+): Promise<RequestAttachments> => {
+  const capabilities = getModelCapabilities(provider, model)
+  const current = new Set(request.question.files.map((file) => file.id))
+  if (capabilities.files === 'none') {
+    if (current.size > 0) {
+      throw new ApiError('protocol', { key: 'replyAttachmentUnsupported' })
+    }
+    return new Map()
+  }
+  // 同一附件可能被多轮消息引用（编辑、重新生成），按 id 去重后只读一次
+  const files = new Map<string, FileAttachment>()
+  for (const [user] of getContextRounds(request.history)) {
+    user.files.forEach((file) => files.set(file.id, file))
+  }
+  request.question.files.forEach((file) => files.set(file.id, file))
+
+  const attachments: RequestAttachments = new Map()
+  for (const file of files.values()) {
+    signal.throwIfAborted()
+    const kind = getAttachmentKind(file.name, file.mimeType)
+    if (kind === 'document' || (kind === 'image' && !capabilities.vision)) {
+      if (current.has(file.id)) {
+        throw new ApiError('protocol', {
+          key: kind === 'document' ? 'replyAttachmentUnsupported' : 'replyImageUnsupported',
+        })
+      }
+      continue
+    }
+    const blob = await loadAttachmentBlob(file.id)
+    const inline = blob ? await toInlineAttachment(file, blob) : null
+    if (inline) {
+      attachments.set(file.id, inline)
+    } else if (current.has(file.id)) {
+      throw new ApiError('protocol', { key: 'replyAttachmentMissing' })
+    }
+  }
+  return attachments
+}
+
+/**
+ * 附件准备按服务商能力分派：声明了 filesApi 的（目前为 DeepSeek）继续走服务端文件接口，
+ * 其余服务商一律内联，避免把只在 DeepSeek 有效的 file_id 发给别家。
+ */
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  provider: ProviderConfig,
+  model: ModelConfig,
+  signal: AbortSignal
+): Promise<PreparedRequest> =>
+  provider.features?.filesApi
+    ? {
+        request: await prepareServerFiles(sessionId, request, provider, signal),
+        attachments: new Map(),
+      }
+    : { request, attachments: await resolveInlineAttachments(request, provider, model, signal) }
 
 /** 本次请求实际会用到的服务端 file_id */
 const collectServerFileIds = (request: Request): Set<string> => {
@@ -997,11 +1081,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           throw new ApiError('protocol', { key: 'replyNoProvider' })
         }
         const { provider, model } = selection
-        const prepared = await prepareFiles(sessionId, request, provider, controller.signal)
+        const prepared = await prepareFiles(sessionId, request, provider, model, controller.signal)
         preparing = false
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
-        const latestReminder = prepared.prefix
-          ? prepared.prefix.latestReminder
+        const latestReminder = prepared.request.prefix
+          ? prepared.request.prefix.latestReminder
           : provider.features?.latestReminder
             ? createLatestReminder(useSettings.getState())
             : undefined
@@ -1010,9 +1094,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         updateReply(sessionId, reply)
         persist(sessionId)
         const messages = toRequestMessages(
-          prepared.history,
-          prepared.question,
-          prepared.prefix,
+          prepared.request.history,
+          prepared.request.question,
+          prepared.attachments,
+          prepared.request.prefix,
           initial.thinking ?? false,
           latestReminder
         )
@@ -1053,7 +1138,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = settleReply(reply, 'done', Date.now())
         // 服务端标题优先；没拿到时用首条提问兜底，只对还没有标题的会话生效
         if (titleRequests.has(controller) && !controller.signal.aborted && !get().importingHistory) {
-          const fallback = createLocalTitle(prepared.question.content)
+          const fallback = createLocalTitle(prepared.request.question.content)
           if (fallback) {
             updateSession(sessionId, (session) =>
               session.title ? session : { ...session, title: fallback }

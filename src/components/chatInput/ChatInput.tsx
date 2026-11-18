@@ -20,7 +20,7 @@ import {
   setDraftText,
   useDrafts,
 } from '../../services/chat/drafts.js'
-import { getActiveProvider, useCapability } from '../../services/providers/store.js'
+import { getActiveFileMode, getActiveProvider, useCapability } from '../../services/providers/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
@@ -88,7 +88,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (!provider) {
       return
     }
-    const error = addDraftFiles(sessionId, files, provider)
+    const error = addDraftFiles(sessionId, files, provider, getActiveFileMode())
     if (error) {
       showToast(error)
     }

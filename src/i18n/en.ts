@@ -73,6 +73,10 @@ export const en = {
   replyNoProvider: 'No provider is configured. Add a provider and model in Settings first.',
   replyAttachmentUnsupported:
     'The selected model does not support attachments. Switch models or remove the file.',
+  replyImageUnsupported:
+    'The selected model does not accept images. Switch to a vision-capable model or remove the image.',
+  replyAttachmentMissing:
+    'The local copy of this attachment is missing. Remove it and add the file again.',
   replyInvalidApiKey:
     'The API Key is invalid or has been deleted. Please replace it and try again.',
   replyInsufficientBalance: 'Insufficient account balance. Please top up and try again.',
@@ -199,6 +203,9 @@ export const en = {
   upload: 'Upload',
   uploadUnsupportedFormat:
     'The selected files include unsupported formats. Please convert them and try again. Supported: PDF, DOC, XLSX, PPT, images, text, code, and more.',
+  uploadUnsupportedDocument:
+    'This provider can only send images and text inline. PDF or Word files need a provider with a file API.',
+  uploadUnsupportedImage: 'Unsupported image format. Convert it to PNG, JPG, GIF or WebP first.',
   uploadFileStatusFailed: 'Upload failed',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',

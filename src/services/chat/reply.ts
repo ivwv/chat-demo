@@ -1,6 +1,7 @@
 import type {
   AssistantBlockParam,
   FileBlockParam,
+  InlineAttachment,
   MessageParam,
   MessageStreamEvent,
   OutputBlockStart,
@@ -15,21 +16,38 @@ import type {
   UserMessage,
 } from './types.js'
 
+/** 本次请求可内联的附件内容，按附件本地 id 索引；缺项表示离线附件或服务端文件 */
+export type RequestAttachments = Map<string, InlineAttachment>
+
 /**
- * 文件按 Files API 的 file_id（附件的 serverId）引用：图片用 image 块，其余用 document 块。
- * 发送前 streamReply 会先补齐 serverId；仍为 null 的是本地没有原件的附件，不进入请求。
+ * 附件转成内容块：
+ * - 有内联内容：图片用 base64 source，文本另拼成文本块，两者都不依赖服务商的文件接口；
+ * - 只有 Files API 的 serverId：图片用 image 块、其余用 document 块（仅声明了 filesApi 的服务商）；
+ * - 都没有（本地原件已丢失的历史附件）：不进入请求。
  */
-const toFileBlocks = (files: FileAttachment[]): FileBlockParam[] =>
-  files.flatMap(({ serverId, isImage }) =>
-    serverId
-      ? [
-          {
-            type: isImage ? 'image' : 'document',
-            source: { type: 'file', file_id: serverId },
-          },
-        ]
+const toFileBlocks = (files: FileAttachment[], attachments: RequestAttachments): FileBlockParam[] =>
+  files.flatMap(({ id, serverId, isImage }): FileBlockParam[] => {
+    const inline = attachments.get(id)
+    if (inline) {
+      return inline.kind === 'image'
+        ? [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: inline.mediaType, data: inline.data },
+            },
+          ]
+        : []
+    }
+    return serverId
+      ? [{ type: isImage ? 'image' : 'document', source: { type: 'file', file_id: serverId } }]
       : []
-  )
+  })
+
+/** 文本附件整段拼进提问：标明文件名，模型才知道在回答哪份材料 */
+const toTextBlock = (file: FileAttachment, text: string): TextBlockParam => ({
+  type: 'text',
+  text: `以下是附件《${file.name}》的内容：\n\n${text}`,
+})
 
 const toReplyBlock = (block: OutputBlockStart, now: number): ReplyBlock | null => {
   switch (block.type) {
@@ -201,15 +219,30 @@ const isUsableReply = (message: Message): message is AssistantMessage =>
   !message.blocks.some((block) => block.type === 'text' && block.isTemplate) &&
   getReplyText(message) !== ''
 
-/** 有文件时用内容块数组：先文件后文本，文件按 Files API 的 file_id 引用 */
-const toUserParam = ({ content, files }: UserMessage): MessageParam => {
-  const blocks = toFileBlocks(files)
-  return blocks.length === 0
-    ? { role: 'user', content }
-    : {
-        role: 'user',
-        content: [...blocks, ...(content ? [{ type: 'text' as const, text: content }] : [])],
-      }
+/** 有文件时用内容块数组：先图片后文本，提问放在最后，模型更容易接住问题 */
+const toUserParam = (
+  { content, files }: UserMessage,
+  attachments: RequestAttachments
+): MessageParam | null => {
+  const blocks = toFileBlocks(files, attachments)
+  const texts: TextBlockParam[] = []
+  for (const file of files) {
+    const inline = attachments.get(file.id)
+    if (inline?.kind === 'text') {
+      texts.push(toTextBlock(file, inline.text))
+    }
+  }
+  if (content) {
+    texts.push({ type: 'text', text: content })
+  }
+  if (blocks.length === 0 && texts.length === 0) {
+    return null
+  }
+  // 只有提问本身时保持字符串写法，兼容对内容块数组支持不佳的兼容端点
+  if (blocks.length === 0 && texts.length === 1 && texts[0].text === content) {
+    return { role: 'user', content }
+  }
+  return { role: 'user', content: [...blocks, ...texts] }
 }
 
 /**
@@ -303,6 +336,7 @@ export const getContextRounds = (history: Message[]): [UserMessage, AssistantMes
 export const toRequestMessages = (
   history: Message[],
   question: UserMessage,
+  attachments: RequestAttachments,
   prefix?: AssistantMessage,
   thinking = prefix?.thinking ?? false,
   latestReminder?: string
@@ -317,15 +351,16 @@ export const toRequestMessages = (
     }
   }
   for (const [user, reply] of getContextRounds(history)) {
-    // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。
-    if (!user.content && toFileBlocks(user.files).length === 0) {
+    // 没有文字、附件也都没法进入请求（原件缺失或服务端未接受）时，提问为空，连同回答一起省略。
+    const param = toUserParam(user, attachments)
+    if (!param) {
       continue
     }
     appendReminder(reply.latestReminder)
-    messages.push(toUserParam(user), toAssistantParam(reply))
+    messages.push(param, toAssistantParam(reply))
   }
   appendReminder(latestReminder)
-  messages.push(toUserParam(question))
+  messages.push(toUserParam(question, attachments) ?? { role: 'user', content: question.content })
   if (prefix?.prefix) {
     const assistant = toAssistantParam(prefix, true, thinking)
     // 没有非空白正文或有效思考时直接重发原问题，避免服务端拒绝空 Prefill。

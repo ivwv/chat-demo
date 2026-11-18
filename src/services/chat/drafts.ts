@@ -9,7 +9,7 @@ import {
   validateFiles,
   type UploadTask,
 } from '../attachments.js'
-import type { ProviderConfig } from '../providers/types.js'
+import type { FileMode, ProviderConfig } from '../providers/types.js'
 import type { FileAttachment } from './types.js'
 
 export type DraftAttachment = {
@@ -18,6 +18,8 @@ export type DraftAttachment = {
   file: File
   isImage: boolean
   previewUrl: string | null
+  /** 需要先传到服务端（filesApi 模式）；false 表示随请求内联发送，选中即就绪 */
+  needsUpload: boolean
 }
 
 type Draft = { text: string; attachments: DraftAttachment[] }
@@ -58,19 +60,21 @@ const upload = (attachment: DraftAttachment, provider: ProviderConfig) => {
   ).catch(() => {})
 }
 
-/** 整批校验通过后才创建预览和开始上传。 */
+/** 整批校验通过后才创建预览和开始上传；内联模式下图片与文本选中即就绪。 */
 export const addDraftFiles = (
   sessionId: string | null,
   files: File[],
-  provider: ProviderConfig
+  provider: ProviderConfig,
+  mode: FileMode
 ): TranslationMessage | null => {
   if (files.length === 0) {
     return null
   }
-  const error = validateFiles(files, getDraft(sessionId).attachments.length)
+  const error = validateFiles(files, getDraft(sessionId).attachments.length, mode)
   if (error) {
     return error
   }
+  const needsUpload = mode === 'filesApi'
   const added = files.map((file): DraftAttachment => {
     const image = isImage(resolveMimeType(file))
     return {
@@ -78,10 +82,15 @@ export const addDraftFiles = (
       file,
       isImage: image,
       previewUrl: image ? URL.createObjectURL(file) : null,
+      needsUpload,
     }
   })
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
-  added.forEach((attachment) => upload(attachment, provider))
+  added.forEach((attachment) => {
+    if (attachment.needsUpload) {
+      upload(attachment, provider)
+    }
+  })
   return null
 }
 
@@ -96,21 +105,21 @@ export const retryDraftAttachment = (
   }
 }
 
-/** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */
+/** 发送按钮和实际提交共用规则：有内容，且需要上传的附件都已成功。 */
 export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
   const text = draft.text.trim()
   if (!text && draft.attachments.length === 0) {
     return null
   }
-  const files: (FileAttachment & { serverId: string; blob: Blob })[] = []
+  const files: (FileAttachment & { blob: Blob })[] = []
   for (const attachment of draft.attachments) {
     const task = tasks[attachment.id]
-    if (task?.status !== 'done' || !task.serverId) {
+    if (attachment.needsUpload && (task?.status !== 'done' || !task.serverId)) {
       return null
     }
     files.push({
       id: attachment.id,
-      serverId: task.serverId,
+      serverId: attachment.needsUpload ? (task?.status === 'done' ? task.serverId : null) : null,
       name: attachment.file.name,
       size: attachment.file.size,
       isImage: attachment.isImage,

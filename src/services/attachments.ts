@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import type { LinkedMessage, TranslationMessage } from '../i18n/index.js'
 import { uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
-import type { FilePurpose } from './api/types.js'
-import type { ProviderConfig } from './providers/types.js'
+import type { FilePurpose, InlineAttachment } from './api/types.js'
+import type { FileMode, ProviderConfig } from './providers/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
 
 /** 允许上传的扩展名，按扩展名白名单过滤，清单见 uploadExts.ts */
@@ -14,6 +14,13 @@ export const ACCEPT = ACCEPTED_EXTS.map((ext) => `.${ext}`).join(',')
 export const MAX_SIZE_MB = 64
 /** 按 user_data 上传的文件（纯文本、代码、表格、电子书）原文件上限更小 */
 export const MAX_USER_DATA_SIZE_MB = 32
+/**
+ * 内联图片的上限：base64 后体积约增加三分之一，且图片会进入每一轮上下文，
+ * 比文件接口的额度卡得更紧。
+ */
+export const MAX_INLINE_IMAGE_MB = 8
+/** 单个文本附件拼进上下文的最大字符数，超出部分截断并注明 */
+export const MAX_INLINE_TEXT_CHARS = 200_000
 export const MAX_COUNT = 50
 /** 同时上传的文件数 */
 const MAX_CONCURRENT = 3
@@ -29,6 +36,59 @@ export const isAcceptedExt = (name: string) => ACCEPTED_EXTS.includes(getFileExt
 /** 需要服务端做版面解析的文档；其余非图片文件（纯文本、代码、表格、电子书）无需解析 */
 const LAYOUT_RECOGNITION_EXTS = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx'])
 
+/** 二进制文档：无法内联成文本，只能走 Files API */
+const BINARY_DOC_EXTS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+  'epub',
+  'mobi',
+  'psd',
+  'h5',
+  'hdf',
+  'dds',
+  'mpeg',
+  'mpg',
+])
+
+/** 常见图片扩展名：部分系统给不出 MIME，按扩展名补判 */
+const IMAGE_EXTS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'bmp',
+  'svg',
+  'svgz',
+  'ico',
+  'tif',
+  'tiff',
+  'avif',
+  'apng',
+  'jfif',
+  'xbm',
+])
+
+/** 附件在请求里的处理方式：图片内联 base64、文本拼进消息、文档只能上传 */
+export type AttachmentKind = 'image' | 'text' | 'document'
+
+/** 主流接口（Anthropic / OpenAI）都只接受这几种图片 MIME，其余无法内联 */
+const INLINE_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+
+export const isInlineImageMime = (mimeType: string) => INLINE_IMAGE_MIMES.has(mimeType)
+
+export const getAttachmentKind = (name: string, mimeType = ''): AttachmentKind => {
+  if (IMAGE_EXTS.has(getFileExt(name)) || mimeType.startsWith('image/')) {
+    return 'image'
+  }
+  return BINARY_DOC_EXTS.has(getFileExt(name)) ? 'document' : 'text'
+}
+
 /** 上传时的 purpose：图片不传，PDF 与 Word、PPT 做版面解析，其余按 user_data 上传 */
 export const getUploadPurpose = (name: string, isImage: boolean): FilePurpose | null => {
   if (isImage) {
@@ -43,14 +103,45 @@ const getMaxSizeMB = (file: File) =>
     ? MAX_USER_DATA_SIZE_MB
     : MAX_SIZE_MB
 
-/** 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加 */
-export const validateFiles = (files: File[], currentCount: number): TranslationMessage | null => {
+/**
+ * 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加。
+ * 内联模式（非 filesApi）只接受图片与文本，且图片另有更小的上限。
+ */
+export const validateFiles = (
+  files: File[],
+  currentCount: number,
+  mode: FileMode = 'inline'
+): TranslationMessage | null => {
   if (files.some((file) => !isAcceptedExt(file.name))) {
     return { key: 'uploadUnsupportedFormat' }
   }
-  const oversized = files.find((file) => file.size > getMaxSizeMB(file) * 1024 * 1024)
-  if (oversized) {
-    return { key: 'uploadMaxMBSize', params: { size: getMaxSizeMB(oversized) } }
+  if (mode === 'none') {
+    return { key: 'uploadUnsupportedDocument' }
+  }
+  if (mode !== 'filesApi') {
+    const kinds = files.map((file) => ({
+      file,
+      kind: getAttachmentKind(file.name, resolveMimeType(file)),
+      mimeType: resolveMimeType(file),
+    }))
+    if (kinds.some((item) => item.kind === 'document')) {
+      return { key: 'uploadUnsupportedDocument' }
+    }
+    // 无法内联的图片格式（bmp、svg、tiff 等）直接拒绝，避免服务商返回 400
+    if (kinds.some((item) => item.kind === 'image' && !isInlineImageMime(item.mimeType))) {
+      return { key: 'uploadUnsupportedImage' }
+    }
+    const heavy = kinds.find(
+      (item) => item.kind === 'image' && item.file.size > MAX_INLINE_IMAGE_MB * 1024 * 1024
+    )
+    if (heavy) {
+      return { key: 'uploadMaxMBSize', params: { size: MAX_INLINE_IMAGE_MB } }
+    }
+  } else {
+    const oversized = files.find((file) => file.size > getMaxSizeMB(file) * 1024 * 1024)
+    if (oversized) {
+      return { key: 'uploadMaxMBSize', params: { size: getMaxSizeMB(oversized) } }
+    }
   }
   if (currentCount + files.length > MAX_COUNT) {
     return { key: 'uploadMaxFiles', params: { count: MAX_COUNT } }
@@ -218,12 +309,66 @@ const MIME_BY_EXT: Record<string, string> = {
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  svgz: 'image/svg+xml',
+  ico: 'image/x-icon',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  avif: 'image/avif',
+  apng: 'image/apng',
+  jfif: 'image/jpeg',
+  xbm: 'image/x-xbitmap',
+  pdf: 'application/pdf',
 }
 
-/** 取文件的 MIME：优先用浏览器给出的类型，缺失时按扩展名推断 */
-export const resolveMimeType = (file: File) => file.type || MIME_BY_EXT[getFileExt(file.name)] || ''
+/** 取 MIME：优先用浏览器给出的类型；通用的 octet-stream 与空值按扩展名推断 */
+export const mimeTypeOf = (name: string, type = '') =>
+  (type && type !== 'application/octet-stream' ? type : '') || MIME_BY_EXT[getFileExt(name)] || ''
+
+export const resolveMimeType = (file: File) => mimeTypeOf(file.name, file.type)
 
 export const isImage = (mimeType: string) => mimeType.startsWith('image/')
+
+/** 读成 base64（去掉 data URL 前缀），供内联图片使用 */
+const readBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const comma = result.indexOf(',')
+      resolve(comma >= 0 ? result.slice(comma + 1) : '')
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read attachment'))
+    reader.readAsDataURL(blob)
+  })
+
+/**
+ * 把原件读成请求里的内联形态：图片转 base64，文本读成字符串（过长时截断）。
+ * 二进制文档返回 null，由调用方按服务商能力拦下，不做假支持。
+ */
+export const toInlineAttachment = async (
+  file: { name: string; mimeType: string },
+  blob: Blob
+): Promise<InlineAttachment | null> => {
+  const mimeType = mimeTypeOf(file.name, file.mimeType || blob.type)
+  const kind = getAttachmentKind(file.name, mimeType)
+  // 文档与无法内联的图片格式都返回 null：历史里遇到的静默跳过，不会把 400 带进请求
+  if (kind === 'document' || (kind === 'image' && !isInlineImageMime(mimeType))) {
+    return null
+  }
+  if (kind === 'image') {
+    return { kind: 'image', mediaType: mimeType, data: await readBase64(blob) }
+  }
+  const text = await blob.text()
+  return {
+    kind: 'text',
+    text:
+      text.length > MAX_INLINE_TEXT_CHARS
+        ? `${text.slice(0, MAX_INLINE_TEXT_CHARS)}\n\n[内容过长，已截断]`
+        : text,
+  }
+}
 
 /** 文件扩展名（大写），用于卡片元信息 */
 export const getExtension = (name: string) => {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
-import { MAX_COUNT, MAX_SIZE_MB } from '../../services/attachments.js'
+import { MAX_COUNT, MAX_INLINE_IMAGE_MB, MAX_SIZE_MB } from '../../services/attachments.js'
+import { getActiveFileMode } from '../../services/providers/store.js'
 import styles from './DragMask.module.css'
 
 const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false
@@ -61,14 +62,14 @@ export const DragMask = () => createPortal(<DragMaskContent />, document.body)
 
 const DragMaskContent = () => {
   const t = useTranslate()
+  // 内联模式按图片上限提示，避免用户按文件接口的额度准备文件后被拒
+  const size = getActiveFileMode() === 'filesApi' ? MAX_SIZE_MB : MAX_INLINE_IMAGE_MB
   return (
     <div className={styles.mask}>
       <div className={styles.wrap}>
         <UploadIcon />
         <div className={styles.title}>{t('dragFileToUpload')}</div>
-        <div className={styles.desc}>
-          {t('dragFileDesc', { count: MAX_COUNT, size: MAX_SIZE_MB })}
-        </div>
+        <div className={styles.desc}>{t('dragFileDesc', { count: MAX_COUNT, size })}</div>
       </div>
     </div>
   )

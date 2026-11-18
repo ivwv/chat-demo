@@ -48,11 +48,14 @@ const AttachmentItem = ({
   onRemove: () => void
 }) => {
   const t = useTranslate()
-  const task = useUploads((state) => state.tasks[item.id] ?? UPLOADING)
-  const status = task.status
-  const error = task.status === 'error' ? t(task.error.key, task.error.params) : undefined
+  // 内联附件不经过上传队列，直接是就绪态
+  const task = useUploads((state) =>
+    item.needsUpload ? (state.tasks[item.id] ?? UPLOADING) : null
+  )
+  const status = task?.status ?? 'done'
+  const error = task?.status === 'error' ? t(task.error.key, task.error.params) : undefined
   // 过大、格式不支持等重试无效的失败只提示原因，需删除后再发送
-  const retry = task.status === 'error' && task.retryable ? onRetry : undefined
+  const retry = task?.status === 'error' && task.retryable ? onRetry : undefined
   const failed = status === 'error'
   const retryLabel = t('uploadRetry', { message: error ?? t('uploadFileStatusFailed') })
   // 「上传失败」只显示重试图标，其余原因写在图片上：可重试时在图标下方，不可重试时贴底

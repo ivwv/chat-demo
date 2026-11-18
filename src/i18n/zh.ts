@@ -69,6 +69,8 @@ export const zh = {
   speechUnsupported: '当前服务商不支持语音功能，请在设置中切换到支持的服务商',
   replyNoProvider: '尚未配置可用的服务商，请先在设置中添加服务商和模型',
   replyAttachmentUnsupported: '当前服务商不支持该附件，请更换模型或移除附件',
+  replyImageUnsupported: '当前模型不支持图片输入，请换用支持图像理解的模型，或移除图片',
+  replyAttachmentMissing: '附件原件已丢失，请移除后重新添加',
   replyInsufficientBalance: '账户余额不足，请充值后重试',
   replyRateLimited: '请求过于频繁，请稍后再试',
   completionServerBusyToast: '服务器繁忙，请稍后再试',
@@ -186,6 +188,9 @@ export const zh = {
   upload: '上传',
   uploadUnsupportedFormat:
     '上传的文件包含暂未支持的文件格式，请转换文件格式后重试。支持 PDF、DOC、XLSX、PPT、图片、文本、代码等。',
+  uploadUnsupportedDocument:
+    '当前服务商只能内联发送图片与文本附件，PDF、Word 等文档需要支持文件接口的服务商',
+  uploadUnsupportedImage: '暂不支持该图片格式，请转为 PNG、JPG、GIF 或 WebP 后重试',
   uploadFileStatusFailed: '上传失败',
   uploadRetry: '{message}，点击重试',
   chatInputPlaceholderChat: '请输入消息',

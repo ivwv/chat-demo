@@ -231,6 +231,12 @@ export const getCapabilities = (
   selection = getActiveSelection()
 ): ModelCapabilities | null => (selection ? getModelCapabilities(selection.provider, selection.model) : null)
 
+/**
+ * 当前选择的附件模式：filesApi 需要先上传，inline 随请求内联。
+ * 还没有可用选择时按内联处理，真正发请求前会再校验一次。
+ */
+export const getActiveFileMode = () => getCapabilities()?.files ?? 'inline'
+
 export const setActiveKey = (key: string) => {
   const { providers } = useProviders.getState()
   if (findByKey(providers, key)) {

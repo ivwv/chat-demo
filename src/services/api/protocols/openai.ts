@@ -75,8 +75,14 @@ const toOpenAIMessages = (system: string, messages: MessageParam[]): OpenAIMessa
       for (const block of message.content) {
         if (block.type === 'text') {
           parts.push({ type: 'text', text: block.text })
+        } else if (block.type === 'image' && block.source.type === 'base64') {
+          // 图片内联成 data URL，是 Chat Completions 唯一跨厂商通用的图片入参
+          parts.push({
+            type: 'image_url',
+            image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` },
+          })
         } else {
-          // 附件改为内联 base64 之前，非 Anthropic 协议无法引用服务端文件
+          // file / document 块来自 Files API，只有声明了 filesApi 的服务商能接受
           throw new ApiError('protocol', { key: 'replyAttachmentUnsupported' })
         }
       }
