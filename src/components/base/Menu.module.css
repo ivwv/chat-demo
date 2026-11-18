@@ -4,7 +4,8 @@
 
 .menu {
   position: fixed;
-  z-index: 900;
+  /* 高于弹窗遮罩（1000），保证设置弹窗里的菜单不被盖住；低于 tooltip（2000） */
+  z-index: 1100;
   box-sizing: border-box;
   min-width: 124px;
   padding: 4px;

@@ -270,14 +270,12 @@ export const bindChatPersistence = () => {
 }
 
 /**
- * 新建回复：默认按当前选择记录服务商与模型快照；
- * 重新生成时传入原回答，沿用它的组合，避免换了模型后重新生成结果大变。
+ * 新建回复：一律按当前选择记录服务商与模型快照。
+ * 重新生成也跟随当前选择，用户切换模型后立即生效，不会继续用旧模型请求。
  */
-const createReply = (source?: AssistantMessage): AssistantMessage => {
+const createReply = (): AssistantMessage => {
   const { thinking, search } = useSettings.getState()
-  const selection = source
-    ? resolveSelection(source.providerId, source.model)
-    : getActiveSelection()
+  const selection = getActiveSelection()
   const capabilities = selection ? getModelCapabilities(selection.provider, selection.model) : null
   return {
     id: createId(),
@@ -659,7 +657,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     return
   }
   const history = path.slice(0, index - 1)
-  const reply = createReply(path[index])
+  const reply = createReply()
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
@@ -1102,7 +1100,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           : provider.features?.latestReminder
             ? createLatestReminder(useSettings.getState())
             : undefined
-        // 记录实际使用的服务商与模型，切回该回答重新生成时沿用同一组合。
+        // 记录实际使用的服务商与模型，供回答统计与会话回看展示
         reply = { ...reply, providerId: provider.id, model: model.id, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)

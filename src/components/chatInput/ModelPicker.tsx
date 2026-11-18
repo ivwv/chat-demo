@@ -14,6 +14,10 @@ import styles from './ModelPicker.module.css'
 
 const SEPARATOR = '::'
 
+/** 生成悬停提示：名称与 id 不同时一并展示，避免用户只看到被截断的显示名 */
+const fullModelTitle = (label: string, modelId: string) =>
+  label === modelId ? label : `${label} (${modelId})`
+
 type Candidate = {
   key: string
   providerName: string
@@ -132,6 +136,7 @@ export const ModelPicker = () => {
         type="button"
         className={clsx(styles.trigger, open && styles.triggerOpen)}
         aria-label={t('modelSelectorLabel')}
+        title={fullModelTitle(activeModel.label, activeModel.id)}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -174,6 +179,7 @@ export const ModelPicker = () => {
                         type="button"
                         role="menuitemradio"
                         aria-checked={item.key === activeKey}
+                        title={fullModelTitle(item.label, item.modelId)}
                         className={clsx(
                           styles.option,
                           item.key === activeKey && styles.optionSelected,
@@ -183,7 +189,9 @@ export const ModelPicker = () => {
                         onClick={() => select(item.key)}
                       >
                         <span className={styles.optionLabel}>{item.label}</span>
-                        <span className={styles.optionHint}>{item.providerName}</span>
+                        <span className={styles.optionHint} title={item.providerName}>
+                          {item.providerName}
+                        </span>
                         {item.key === activeKey ? <IconCheckOutline16 /> : null}
                       </button>
                     ))
@@ -191,7 +199,9 @@ export const ModelPicker = () => {
                 ) : (
                   providers.map((provider) => (
                     <div key={provider.id} className={styles.group}>
-                      <div className={styles.groupName}>{provider.name}</div>
+                      <div className={styles.groupName} title={provider.name}>
+                        {provider.name}
+                      </div>
                       {provider.models.map((model) => {
                         const key = `${provider.id}${SEPARATOR}${model.id}`
                         const selected = key === activeKey
@@ -202,6 +212,7 @@ export const ModelPicker = () => {
                             type="button"
                             role="menuitemradio"
                             aria-checked={selected}
+                            title={fullModelTitle(model.label, model.id)}
                             className={clsx(
                               styles.option,
                               selected && styles.optionSelected,
