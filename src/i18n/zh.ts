@@ -189,6 +189,8 @@ export const zh = {
   uploadFileStatusFailed: '上传失败',
   uploadRetry: '{message}，点击重试',
   chatInputPlaceholderChat: '请输入消息',
+  unsupportedThinkTooltip: '当前模型不支持深度思考',
+  unsupportedSearchTooltip: '当前服务商不支持联网搜索',
   deactivatedThinkTooltip: '先思考后回答，解决推理问题',
   thinkingSwitch: '深度思考',
   modelSelectorLabel: '选择模型',

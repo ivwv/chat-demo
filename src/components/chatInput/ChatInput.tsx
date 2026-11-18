@@ -20,7 +20,7 @@ import {
   setDraftText,
   useDrafts,
 } from '../../services/chat/drafts.js'
-import { getActiveProvider } from '../../services/providers/store.js'
+import { getActiveProvider, useCapability } from '../../services/providers/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
@@ -55,6 +55,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  // 能力位跟随当前模型：不支持的开关直接禁用，避免用户以为开了就生效；
+  // 还没配置服务商时（null）不禁用，先让用户被引导去设置
+  const canThink = useCapability('thinking') !== false
+  const canSearch = useCapability('search') !== false
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -210,24 +214,28 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         <ModelPicker />
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
+          <Tooltip content={t(canThink ? 'deactivatedThinkTooltip' : 'unsupportedThinkTooltip')}>
             <button
               type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
+              className={clsx(styles.toggle, thinking && canThink && styles.selected)}
               aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
+              aria-pressed={thinking && canThink}
+              disabled={!canThink}
               onClick={() => setThinking(!thinking)}
             >
               <IconThinkOutline14 />
               <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
             </button>
           </Tooltip>
-          <Tooltip content={t('deactivatedSearchTooltip')}>
+          <Tooltip
+            content={t(canSearch ? 'deactivatedSearchTooltip' : 'unsupportedSearchTooltip')}
+          >
             <button
               type="button"
-              className={clsx(styles.toggle, search && styles.selected)}
+              className={clsx(styles.toggle, search && canSearch && styles.selected)}
               aria-label={t('search')}
-              aria-pressed={search}
+              aria-pressed={search && canSearch}
+              disabled={!canSearch}
               onClick={() => setSearch(!search)}
             >
               <IconGlobeLanguageOutline14 />

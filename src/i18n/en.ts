@@ -202,6 +202,8 @@ export const en = {
   uploadFileStatusFailed: 'Upload failed',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',
+  unsupportedThinkTooltip: 'The selected model does not support reasoning',
+  unsupportedSearchTooltip: 'The selected provider does not support web search',
   deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
   modelSelectorLabel: 'Select model',
