@@ -130,6 +130,17 @@ export const ProviderEditor = ({
     })
   }
 
+  /** 拉取模型用全量替换：上游下架的模型不再残留，保留仍存在模型的 label/capabilities */
+  const replaceModels = (ids: string[]) => {
+    setForm((current) => {
+      const byId = new Map(current.models.map((item) => [item.id, item]))
+      return {
+        ...current,
+        models: ids.map((id) => byId.get(id) ?? { id, label: id }),
+      }
+    })
+  }
+
   const describe = (cause: unknown) => {
     if (cause instanceof Error && cause.message) {
       return cause.message
@@ -146,7 +157,12 @@ export const ProviderEditor = ({
     try {
       const models = await fetchModels(toConfig())
       if (mode === 'pull') {
-        addModels(models)
+        // 上游没返回任何模型时保留原列表，避免接口异常导致误清空
+        if (models.length === 0) {
+          setResult({ ok: false, text: t('providerModelsEmptyPulled') })
+          return
+        }
+        replaceModels(models)
       }
       setResult({
         ok: true,
@@ -281,6 +297,7 @@ export const ProviderEditor = ({
           <Button
             variant="outlined"
             size="m"
+            title={t('providerPullModelsHint')}
             disabled={testing !== null || !form.baseUrl.trim()}
             onClick={() => void connect('pull')}
           >
@@ -301,7 +318,23 @@ export const ProviderEditor = ({
         ) : null}
 
         <div className={styles.field}>
-          <span className={styles.fieldLabel}>{t('providerModels')}</span>
+          <div className={styles.modelHeader}>
+            <span className={styles.fieldLabel}>
+              {t('providerModels')}
+              {form.models.length > 0 ? ` (${form.models.length})` : ''}
+            </span>
+            <button
+              type="button"
+              className={styles.clearButton}
+              disabled={form.models.length === 0}
+              onClick={() => {
+                patch('models', [])
+                setResult(null)
+              }}
+            >
+              {t('providerModelsClear')}
+            </button>
+          </div>
           <div className={styles.modelList}>
             {form.models.length === 0 ? (
               <div className={styles.modelEmpty}>{t('providerModelsEmpty')}</div>

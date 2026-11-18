@@ -233,6 +233,38 @@
   resize: vertical;
 }
 
+/* 模型列表标题行：左侧标题与数量，右侧清空全部 */
+.modelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.clearButton {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--dsw-alias-state-error-primary);
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
 .modelList {
   display: flex;
   flex-direction: column;
