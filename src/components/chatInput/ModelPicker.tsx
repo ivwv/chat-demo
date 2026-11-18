@@ -1,5 +1,12 @@
 import clsx from 'clsx'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import {
@@ -37,6 +44,9 @@ export const ModelPicker = () => {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  /** 当前高亮项，用于把它滚进可视区 */
+  const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const { anchorRef, floatingRef, position } = useAnchoredPosition<
     HTMLButtonElement,
     HTMLDivElement
@@ -84,9 +94,38 @@ export const ModelPicker = () => {
 
   const visible = matches ?? candidates
 
+  // 打开或清空搜索时，键盘高亮直接落到当前选中的模型；输入关键词后从第一条开始
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    if (query.trim()) {
+      setActiveIndex(0)
+      return
+    }
+    const index = visible.findIndex((item) => item.key === activeKey)
+    setActiveIndex(index >= 0 ? index : 0)
+  }, [open, query, visible, activeKey])
+
+  // 高亮项不在可视区时滚到列表中间，长列表不必每次手动翻找
   useEffect(() => {
-    setActiveIndex(0)
-  }, [query])
+    if (!open) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const list = listRef.current
+      const item = activeItemRef.current
+      if (!list || !item) {
+        return
+      }
+      const listRect = list.getBoundingClientRect()
+      const itemRect = item.getBoundingClientRect()
+      if (itemRect.top < listRect.top || itemRect.bottom > listRect.bottom) {
+        list.scrollTop += itemRect.top - listRect.top - (listRect.height - itemRect.height) / 2
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [open, activeIndex])
 
   useEffect(() => {
     if (open) {
@@ -168,7 +207,7 @@ export const ModelPicker = () => {
                   onKeyDown={onKeyDown}
                 />
               </div>
-              <div className={styles.list}>
+              <div ref={listRef} className={styles.list}>
                 {matches ? (
                   matches.length === 0 ? (
                     <div className={styles.empty}>{t('modelSearchEmpty')}</div>
@@ -176,6 +215,7 @@ export const ModelPicker = () => {
                     matches.map((item, index) => (
                       <button
                         key={item.key}
+                        ref={index === activeIndex ? activeItemRef : undefined}
                         type="button"
                         role="menuitemradio"
                         aria-checked={item.key === activeKey}
@@ -209,6 +249,7 @@ export const ModelPicker = () => {
                         return (
                           <button
                             key={key}
+                            ref={index === activeIndex ? activeItemRef : undefined}
                             type="button"
                             role="menuitemradio"
                             aria-checked={selected}
