@@ -90,6 +90,41 @@
   gap: 8px;
 }
 
+/* 需要整行输入的内容（系统提示词）改成上下结构 */
+.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.column .text {
+  padding-right: 0;
+}
+
+.systemPromptInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  outline: none;
+  background-color: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+
+  &:focus {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+
+  &::placeholder {
+    color: var(--dsw-alias-label-caption);
+  }
+}
+
 .text {
   display: flex;
   flex: 1 0 0;
@@ -204,67 +239,6 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.apiKey {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 4px;
-}
-
-.apiKeySaved,
-.apiKeyInput {
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  height: var(--ds-control-height-xl);
-  font-size: 14px;
-  line-height: 24px;
-}
-
-.apiKeySaved {
-  justify-content: space-between;
-  padding: 0 10px 0 16px;
-  border-radius: 28px;
-  background-color: var(--dsw-specific-login-input);
-}
-
-.apiKeyMask {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-caption);
-  user-select: none;
-}
-
-.apiKeyInput {
-  gap: 12px;
-  padding: 0 14px;
-  border-radius: 22px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  transition: border-color var(--ds-transition-duration) var(--ds-ease-in-out);
-
-  &:focus-within {
-    border-color: var(--dsw-alias-brand-primary);
-  }
-
-  input {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    padding: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--dsw-alias-label-primary);
-    font: inherit;
-    caret-color: var(--dsw-alias-brand-text);
-
-    &::placeholder {
-      color: var(--dsw-alias-label-caption);
-    }
-  }
-}
-
 .divider {
   flex-shrink: 0;
   width: 1px;
@@ -359,25 +333,6 @@
   .provinceSelect,
   .citySelect {
     flex: 1 1 auto;
-  }
-
-  .apiKey {
-    padding-bottom: 0;
-  }
-
-  .apiKeySaved,
-  .apiKeyInput {
-    height: 52px;
-    padding: 0 12px 0 16px;
-    border: none;
-    border-radius: 40px;
-    background-color: var(--dsw-specific-login-input);
-    font-size: 16px;
-  }
-
-  .apiKeySaved svg {
-    width: 20px;
-    height: 20px;
   }
 
   .cellButton svg {

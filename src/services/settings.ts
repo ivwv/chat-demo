@@ -7,12 +7,14 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** 本机设置，存 localStorage：语言、主题、位置、朗读音色、系统提示词、深度思考与智能搜索开关、侧边栏收起状态 */
 type Settings = {
   locale: Locale
   themePreference: ThemePreference
   location: UserLocation | null
   ttsVoice: TtsVoice
+  /** 附加在每次请求前的助手身份说明；为空时按当前服务商自动生成 */
+  systemPrompt: string
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
@@ -23,6 +25,7 @@ const KEYS = {
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
   ttsVoice: 'chat-demo:tts-voice',
+  systemPrompt: 'chat-demo:system-prompt',
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
@@ -90,6 +93,7 @@ export const useSettings = create<Settings>(() => ({
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
+  systemPrompt: read(KEYS.systemPrompt) ?? '',
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
@@ -114,6 +118,12 @@ export const setThemePreference = (themePreference: ThemePreference) => {
 export const setTtsVoice = (ttsVoice: TtsVoice) => {
   write(KEYS.ttsVoice, ttsVoice)
   useSettings.setState({ ttsVoice })
+}
+
+export const setSystemPrompt = (systemPrompt: string) => {
+  // 空串按「未配置」处理，读回时回落到按服务商自动生成
+  write(KEYS.systemPrompt, systemPrompt.trim() ? systemPrompt : null)
+  useSettings.setState({ systemPrompt })
 }
 
 export const setThinking = (thinking: boolean) => {

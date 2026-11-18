@@ -1,4 +1,5 @@
 import { useTranslate } from '../../i18n/index.js'
+import { useCapability } from '../../services/providers/store.js'
 import {
   describeReadAloudError,
   toggleReadAloud,
@@ -13,6 +14,11 @@ import { ReadingBars } from './ReadingBars.js'
 export const ReadAloudButton = ({ messageId, text }: { messageId: string; text: string }) => {
   const t = useTranslate()
   const status = useReadAloud((state) => (state.messageId === messageId ? state.status : 'idle'))
+  // 没有语音能力的服务商不显示入口，避免点了才报错
+  const supported = useCapability('speech') !== false
+  if (!supported) {
+    return null
+  }
   return (
     <IconButton
       icon={status === 'idle' ? <IconPlayMediaOutline16 /> : <ReadingBars mode={status} />}

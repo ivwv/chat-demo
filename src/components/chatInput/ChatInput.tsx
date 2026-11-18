@@ -59,6 +59,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   // 还没配置服务商时（null）不禁用，先让用户被引导去设置
   const canThink = useCapability('thinking') !== false
   const canSearch = useCapability('search') !== false
+  // 语音接口是服务商专有的，没有该能力的服务商直接不显示入口
+  const canVoice = useCapability('speech') !== false
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -244,20 +246,21 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           </Tooltip>
         </div>
         <div className={styles.right}>
-          <VoiceButton
-            status={voice.status}
-            disabled={!voice.available}
-            seconds={voice.seconds}
-            onClick={() => {
-              if (
-                voice.status !== 'idle' ||
-                (!useChatStore.getState().importingHistory && ensureProvider())
-              ) {
-                void voice.toggle()
-              }
-            }}
-          />
-          <IconButton
+          {canVoice ? (
+            <VoiceButton
+              status={voice.status}
+              disabled={!voice.available}
+              seconds={voice.seconds}
+              onClick={() => {
+                if (
+                  voice.status !== 'idle' ||
+                  (!useChatStore.getState().importingHistory && ensureProvider())
+                ) {
+                  void voice.toggle()
+                }
+              }}
+            />
+          ) : null}          <IconButton
             size="m"
             tone="primary"
             icon={<IconPaperclipOutline16 />}

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
+import { translate } from '../../i18n/index.js'
 import { ApiError } from '../api/client.js'
 import { streamChat } from '../api/dispatch.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
@@ -42,8 +43,13 @@ import {
   type UserMessage,
 } from './types.js'
 
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
+/**
+ * 所有生成请求统一携带的助手身份说明：设置里填了就照用，
+ * 留空时按当前服务商生成，避免把 DeepSeek 的身份按到别家模型上。
+ */
+const buildSystemPrompt = (provider: ProviderConfig) =>
+  useSettings.getState().systemPrompt.trim() ||
+  translate('systemPromptDefault', { name: provider.name })
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
@@ -1105,7 +1111,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           provider,
           model.id,
           {
-            system: SYSTEM_PROMPT,
+            system: buildSystemPrompt(provider),
             messages,
             thinking: initial.thinking ?? false,
             search: initial.search ?? false,

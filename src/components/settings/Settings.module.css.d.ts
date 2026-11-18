@@ -7,6 +7,8 @@ declare const styles: {
   readonly "content": string;
   readonly "cell": string;
   readonly "row": string;
+  readonly "column": string;
+  readonly "systemPromptInput": string;
   readonly "text": string;
   readonly "label": string;
   readonly "uploadButton": string;
@@ -21,10 +23,6 @@ declare const styles: {
   readonly "themeOptionSelected": string;
   readonly "description": string;
   readonly "error": string;
-  readonly "apiKey": string;
-  readonly "apiKeySaved": string;
-  readonly "apiKeyInput": string;
-  readonly "apiKeyMask": string;
   readonly "divider": string;
   readonly "confirm": string;
   readonly "cellButton": string;

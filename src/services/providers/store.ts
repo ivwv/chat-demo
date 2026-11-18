@@ -289,9 +289,10 @@ export const useActiveProvider = () =>
 
 /**
  * 组件用：当前选择是否支持某项能力。
- * 返回 null 表示还没有可用选择（这时不禁用开关，让用户先去配置服务商）。
+ * speech 是服务商级别的开关，其余由模型能力决定。
+ * 返回 null 表示还没有可用选择（这时不禁用入口，让用户先去配置服务商）。
  */
-export const useCapability = (key: 'thinking' | 'search'): boolean | null =>
+export const useCapability = (key: 'thinking' | 'search' | 'speech'): boolean | null =>
   useProviders((state) => {
     const parsed = state.activeKey ? splitKey(state.activeKey) : null
     if (!parsed) {
@@ -299,7 +300,12 @@ export const useCapability = (key: 'thinking' | 'search'): boolean | null =>
     }
     const provider = state.providers.find((item) => item.id === parsed.providerId)
     const model = provider?.models.find((item) => item.id === parsed.modelId)
-    return provider && model ? getModelCapabilities(provider, model)[key] : null
+    if (!provider || !model) {
+      return null
+    }
+    return key === 'speech'
+      ? provider.features?.speech === true
+      : getModelCapabilities(provider, model)[key]
   })
 
 /** 组件用：全部可选模型，按服务商分组展开成一维列表 */

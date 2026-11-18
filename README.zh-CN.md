@@ -2,9 +2,9 @@
 
 [English](README.md) | 简体中文
 
-基于 DeepSeek API 的静态聊天示例。无需应用后端，浏览器直接请求配置的 API 服务。
+多服务商的静态聊天示例。无需应用后端，浏览器直接请求你配置的 API 服务，可在 OpenAI 兼容与 Anthropic 兼容接口之间自由切换。
 
-点击 [在线体验](https://deepseek-ai.github.io/chat-demo/) 即可使用，也可以前往 [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases) 下载压缩包，解压后双击 `index.html` 在本地使用，无需安装或构建。首次使用时，请在设置中填写 API Key。
+点击 [在线体验](https://deepseek-ai.github.io/chat-demo/) 即可使用，也可以前往 [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases) 下载压缩包，解压后双击 `index.html` 在本地使用，无需安装或构建。首次使用时，请在设置中添加服务商并填写 API Key。
 
 ## 运行
 
@@ -29,15 +29,39 @@ pnpm build
 
 ## 功能
 
+- 多服务商、多模型：每个服务商可挂多个模型，输入框里按「服务商 → 模型」两级切换，可随时增删改。
 - 多会话、自动标题、重命名与删除；编辑提问、重新生成和切换消息分支。
 - 流式回答、深度思考、智能搜索、链接阅读与来源引用；支持停止和符合条件的继续生成。
-- 附件上传、粘贴与拖拽，语音输入和回复朗读；移动端录音时输入框首行显示实时频谱。
+- 图片、文本附件随消息内联发送，跨服务商通用；语音输入和回复朗读按服务商能力显示。
 - Markdown、代码高亮、KaTeX 公式和 Mermaid 图表。
 - 简体中文与英文、浅色与深色主题、移动端布局、位置设置、历史导入导出。
 
+## 服务商与模型
+
+打开「设置 → 服务商」，内置一批常见服务商的预设，也可以自定义：
+
+| 字段     | 说明                                                         |
+| -------- | ------------------------------------------------------------ |
+| 协议     | `OpenAI Chat Completions` 或 `Anthropic Messages`，决定请求格式与鉴权头 |
+| 接口地址 | 填到 `/v1` 为止，例如 `https://api.openai.com/v1`            |
+| API Key  | 只保存在本机浏览器；本地推理服务（localhost）可留空           |
+| 模型列表 | 手动添加，或用「拉取模型」调用 `GET /models` 一次性导入       |
+
+模型能力（图像、思考、联网）默认按模型名推断，也可以在编辑弹窗里覆盖；推断不准时以覆盖值为准。服务商级的能力位对应各家专有扩展，**普通 OpenAI 兼容服务请全部保持关闭**，否则这些字段会被原样下发并触发 400：
+
+- 服务端联网搜索 / 服务端生成标题 / 服务端时间提醒 / 安全审核参数：DeepSeek 的专有扩展。
+- 文件接口上传：附件改走 `POST /files` + `file_id`（目前只有 DeepSeek 的预设打开）。关闭时附件内联发送。
+- 语音合成与识别：`/v1/tools/asr`、`/v1/tools/tts`，关闭后输入框与回答里的语音入口不再显示。
+
+## 附件
+
+- 图片读成 base64 随消息内联（OpenAI 用 `image_url` 的 data URL，Anthropic 用 `source.type: base64`），上限 8MB，支持 PNG / JPG / GIF / WebP。
+- 文本类文件（`.txt`、`.md`、`.csv`、代码等）读成文本拼进消息，单份超过 20 万字符会截断。
+- PDF、Word、PPT、Excel 等二进制文档无法内联，只有打开「文件接口上传」的服务商可以发送，其余会被拦下并提示原因。
+
 ## 数据
 
-API Key 和设置保存在浏览器 localStorage，会话及附件原件保存在 IndexedDB，本地数据按浏览器用户配置和站点源（origin）隔离。发送对话、上传附件和使用语音功能时，相应内容会提交给配置的 API 服务。
+服务商配置（含 API Key）和设置保存在浏览器 localStorage，会话及附件原件保存在 IndexedDB，本地数据按浏览器用户配置和站点源（origin）隔离。API Key 为明文存储，公共设备上请谨慎使用。发送对话、上传附件和使用语音功能时，相应内容会提交给当前服务商。
 
 设置中的历史导入导出使用 ZIP 格式。导入会在确认并校验成功后替换全部本地会话和附件；导出包含会话与本地可用的图片原件，不包含 API Key、设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。
 
@@ -53,9 +77,9 @@ API Key 和设置保存在浏览器 localStorage，会话及附件原件保存�
 | `pnpm lint`   | oxlint 检查         |
 | `pnpm format` | oxfmt 格式化        |
 
-[rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理。
+[rspack.config.ts](rspack.config.ts) 不再注入固定的 API 地址，所有服务商配置都在运行时由设置决定。
 
-聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+请求链路只替换「请求构造 + 流解析」两层：`services/api/dispatch.ts` 按 `provider.protocol` 分派到 `protocols/anthropic.ts` 或 `protocols/openai.ts`，两者都产出同一套内部事件 `MessageStreamEvent`，因此会话、分支、渲染、导入导出无需感知协议差异。新增协议（如 Gemini 原生）只需再写一个适配器。
 
 ```text
 src/
@@ -63,12 +87,20 @@ src/
   components/          聊天、设置、Markdown 等界面组件
   i18n/                中英文文案
   services/
-    api/               API 请求、SSE 与协议类型
+    api/               API 请求、SSE、协议适配（anthropic / openai）与协议类型
     chat/              会话、消息分支、本地存储与历史导入导出
+    providers/         服务商与模型配置、内置预设、能力推断
     markdown/          Markdown 解析、代码高亮与图表
     speech/            录音与朗读
   utils/               通用工具
 ```
+
+## 已知限制
+
+- 纯静态直连各家 API，**是否可用取决于对方是否允许浏览器跨域**。OpenAI 官方等会拦截浏览器直连；被拦时需要在 Cloudflare Pages Functions 之类的边缘层补一层代理，而不是加回应用后端。
+- DeepSeek 有两条预设：`DeepSeek（Anthropic 兼容）` 保留仓库原有行为（`/anthropic/v1` + 文件接口），`DeepSeek（OpenAI 兼容）` 走官方 `deepseek-chat` / `deepseek-reasoner`。老用户升级后行为不变。
+- 联网搜索不自建，只在服务商声明了对应能力时开放。
+- 语音能力目前只有 DeepSeek 提供。
 
 ## 许可证
 
