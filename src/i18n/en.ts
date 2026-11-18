@@ -69,6 +69,10 @@ export const en = {
   toolFindFailTooltip: 'No related content found',
   readingLink: 'Reading',
   commonNetworkErrorToast: 'Network Error. Please check your network status.',
+  speechUnsupported: 'The selected provider does not support speech features.',
+  replyNoProvider: 'No provider is configured. Add a provider and model in Settings first.',
+  replyAttachmentUnsupported:
+    'The selected model does not support attachments. Switch models or remove the file.',
   replyInvalidApiKey:
     'The API Key is invalid or has been deleted. Please replace it and try again.',
   replyInsufficientBalance: 'Insufficient account balance. Please top up and try again.',
@@ -141,6 +145,8 @@ export const en = {
   chatInputPlaceholderChat: 'Enter a message',
   deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
+  modelSelectorLabel: 'Select model',
+  modelSelectorPlaceholder: 'Select model',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
   uploadFile: 'Upload files',

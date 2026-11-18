@@ -20,11 +20,13 @@ import {
   setDraftText,
   useDrafts,
 } from '../../services/chat/drafts.js'
+import { getActiveProvider } from '../../services/providers/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
-import { ensureApiKey } from '../settings/settingsDialogState.js'
+import { ensureProvider } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
+import { ModelPicker } from './ModelPicker.js'
 import { showToast } from '../base/toastState.js'
 import { ACCEPT, useUploads } from '../../services/attachments.js'
 import { DraftAttachments } from './DraftAttachments.js'
@@ -75,18 +77,23 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureProvider()) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    const provider = getActiveProvider()
+    if (!provider) {
+      return
+    }
+    const error = addDraftFiles(sessionId, files, provider)
     if (error) {
       showToast(error)
     }
   }
   const retryFile = useCallback(
     (id: string) => {
-      if (!useChatStore.getState().importingHistory && ensureApiKey()) {
-        retryDraftAttachment(sessionId, id, useSettings.getState().apiKey ?? '')
+      const provider = getActiveProvider()
+      if (!useChatStore.getState().importingHistory && provider && ensureProvider()) {
+        retryDraftAttachment(sessionId, id, provider)
       }
     },
     [sessionId]
@@ -141,7 +148,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       return
     }
     // 文本与上传完成态由提交动作读取最新快照，不使用上一次渲染的草稿。
-    if (!ensureApiKey() || !sendMessage(sessionId)) {
+    if (!ensureProvider() || !sendMessage(sessionId)) {
       return
     }
     stopReadAloud()
@@ -200,6 +207,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         </div>
       </div>
       <div className={styles.functionRow}>
+        <ModelPicker />
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
           <Tooltip content={t('deactivatedThinkTooltip')}>
@@ -235,7 +243,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             onClick={() => {
               if (
                 voice.status !== 'idle' ||
-                (!useChatStore.getState().importingHistory && ensureApiKey())
+                (!useChatStore.getState().importingHistory && ensureProvider())
               ) {
                 void voice.toggle()
               }
@@ -247,7 +255,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             icon={<IconPaperclipOutline16 />}
             tooltip={t('uploadFile')}
             disabled={importingHistory}
-            onClick={() => ensureApiKey() && fileInputRef.current?.click()}
+            onClick={() => ensureProvider() && fileInputRef.current?.click()}
           />
           <input
             ref={fileInputRef}

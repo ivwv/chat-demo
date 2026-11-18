@@ -1,7 +1,6 @@
 import type { TranslationMessage } from '../../i18n/index.js'
 import type { ApiErrorKind } from '../api/client.js'
 import type {
-  ChatModel,
   MessageUsage,
   ServerToolBlock,
   StopDetails,
@@ -76,7 +75,9 @@ export type AssistantMessage = MessageBranch & {
   role: 'assistant'
   createdAt: number
   /** 未记录模型时为 null，续写使用当前默认模型。 */
-  model: ChatModel | null
+  model: string | null
+  /** 生成该回答的服务商；导入的历史数据没有该字段，续写时退回当前选择 */
+  providerId?: string
   /** 请求时是否开启深度思考 */
   thinking?: boolean
   /** 请求时是否声明 deepseek_web_search；关闭时仍声明 deepseek_read_url */

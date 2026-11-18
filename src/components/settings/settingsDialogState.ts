@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { useSettings } from '../../services/settings.js'
+import { hasUsableProvider } from '../../services/providers/store.js'
 
 /** 设置弹窗的分组：通用设置 / 数据管理 */
 export type SettingsSection = 'general' | 'data'
@@ -15,9 +15,9 @@ export const openSettings = (section: SettingsSection) =>
 
 export const closeSettings = () => useSettingsDialog.setState({ open: false })
 
-/** 没有 API Key 时打开设置并选中 API Key 所在的「数据管理」，返回是否已有 Key */
-export const ensureApiKey = () => {
-  if (useSettings.getState().apiKey) {
+/** 没有可用的服务商时打开设置，返回当前选择是否已可发请求 */
+export const ensureProvider = () => {
+  if (hasUsableProvider()) {
     return true
   }
   openSettings('data')

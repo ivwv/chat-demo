@@ -17,17 +17,12 @@ const cssLoader = {
 }
 
 type ConfigOptions = {
-  /** 公开 API 的地址，注入为 __API_ORIGIN__ */
-  apiOrigin?: string
   /** 开发服务器配置，支持本地接口代理 */
   devServer?: Configuration['devServer']
 }
 
-/** 创建构建配置，支持自定义 API 地址和开发服务器选项 */
-export const createConfig = ({
-  apiOrigin = 'https://api.deepseek.com',
-  devServer,
-}: ConfigOptions = {}): Configuration => ({
+/** 创建构建配置；服务商与接口地址全部由运行时设置决定 */
+export const createConfig = ({ devServer }: ConfigOptions = {}): Configuration => ({
   mode: dev ? 'development' : 'production',
   entry: './src/main.tsx',
   output: {
@@ -80,7 +75,6 @@ export const createConfig = ({
       scriptLoading: 'defer',
       meta: { 'application-version': version },
     }),
-    new rspack.DefinePlugin({ __API_ORIGIN__: JSON.stringify(apiOrigin) }),
     new rspack.CopyRspackPlugin({
       patterns: [{ from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' }],
     }),

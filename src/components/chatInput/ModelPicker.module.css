@@ -1,0 +1,26 @@
+.picker {
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 46%;
+}
+
+/* 覆盖 Select 的默认尺寸，和右侧开关按钮高度对齐 */
+.picker > button {
+  max-width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.picker > button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .picker {
+    max-width: 42%;
+  }
+}

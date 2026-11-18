@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import { ApiError } from '../api/client.js'
+import { streamChat } from '../api/dispatch.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import { getActiveSelection, resolveSelection } from '../providers/store.js'
+import { getModelCapabilities, type ProviderConfig } from '../providers/types.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -32,28 +34,20 @@ import {
   type UserMessage,
 } from './types.js'
 
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-flash'
 /** 所有生成请求统一携带的助手身份说明 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
-/** 安全审核固定开启，所有请求都走扩展模式 */
-const SAFETY_CHECK = { level: 'high' } as const
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
-  }
-  return tools
+/** 服务端不生成标题时用首条提问截断，避免会话列表一直显示「新对话」 */
+const createLocalTitle = (text: string) => {
+  const title = text.replace(/\s+/g, ' ').trim()
+  const chars = [...title]
+  return chars.length > 24 ? `${chars.slice(0, 24).join('')}…` : title
 }
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
@@ -253,16 +247,24 @@ export const bindChatPersistence = () => {
   }
 }
 
-/** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
-const createReply = (): AssistantMessage => {
+/**
+ * 新建回复：默认按当前选择记录服务商与模型快照；
+ * 重新生成时传入原回答，沿用它的组合，避免换了模型后重新生成结果大变。
+ */
+const createReply = (source?: AssistantMessage): AssistantMessage => {
   const { thinking, search } = useSettings.getState()
+  const selection = source
+    ? resolveSelection(source.providerId, source.model)
+    : getActiveSelection()
+  const capabilities = selection ? getModelCapabilities(selection.provider, selection.model) : null
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
-    thinking,
-    search,
+    model: selection?.model.id ?? null,
+    providerId: selection?.provider.id,
+    thinking: thinking && capabilities?.thinking === true,
+    search: search && capabilities?.search === true,
     prefix: true,
     status: 'pending',
     blocks: [],
@@ -632,7 +634,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     return
   }
   const history = path.slice(0, index - 1)
-  const reply = createReply()
+  const reply = createReply(path[index])
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
@@ -708,8 +710,8 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const { thinking, search } = useSettings.getState()
   const reply: AssistantMessage = {
     ...previous,
-    // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    // 未记录请求配置的回复，续写时使用当前选择。
+    model: previous.model ?? getActiveSelection()?.model.id ?? null,
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -776,7 +778,10 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
+const ensureServerId = async (
+  provider: ProviderConfig,
+  file: FileAttachment
+): Promise<string | null> => {
   if (file.serverId) {
     return file.serverId
   }
@@ -788,7 +793,7 @@ const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<str
   if (!blob) {
     return null
   }
-  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage)
+  return uploadAttachment(provider, file.id, blob, file.name, file.isImage)
 }
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
@@ -813,12 +818,19 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
-const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  provider: ProviderConfig,
+  signal: AbortSignal
+) => {
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
-  const apiKey = useSettings.getState().apiKey ?? ''
+  if (request.question.files.length > 0 && !provider.features?.filesApi) {
+    throw new ApiError('protocol', { key: 'replyAttachmentUnsupported' })
+  }
   const serverIds = new Map<string, string>()
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
@@ -826,7 +838,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   })
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(apiKey, file)
+      const serverId = await ensureServerId(provider, file)
       if (serverId) {
         serverIds.set(file.id, serverId)
       }
@@ -854,7 +866,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   for (const file of pending.values()) {
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(apiKey, file), aborted])
+      const serverId = await Promise.race([ensureServerId(provider, file), aborted])
       if (serverId) {
         serverIds.set(file.id, serverId)
         saveServerIds(sessionId, new Map([[file.id, serverId]]))
@@ -980,13 +992,21 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       let preparing = true
       let receivedContent = false
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
+        const selection = resolveSelection(initial.providerId, initial.model)
+        if (!selection) {
+          throw new ApiError('protocol', { key: 'replyNoProvider' })
+        }
+        const { provider, model } = selection
+        const prepared = await prepareFiles(sessionId, request, provider, controller.signal)
         preparing = false
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
           ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
-        reply = { ...reply, latestReminder }
+          : provider.features?.latestReminder
+            ? createLatestReminder(useSettings.getState())
+            : undefined
+        // 记录实际使用的服务商与模型，切回该回答重新生成时沿用同一组合。
+        reply = { ...reply, providerId: provider.id, model: model.id, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
         const messages = toRequestMessages(
@@ -996,16 +1016,15 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           initial.thinking ?? false,
           latestReminder
         )
-        const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
+        const events = streamChat(
+          provider,
+          model.id,
           {
-            model: initial.model ?? MODEL,
             system: SYSTEM_PROMPT,
             messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+            thinking: initial.thinking ?? false,
+            search: initial.search ?? false,
+            title: titleRequests.has(controller) && provider.features?.serverTitle === true,
           },
           controller.signal
         )
@@ -1032,6 +1051,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
         }
         reply = settleReply(reply, 'done', Date.now())
+        // 服务端标题优先；没拿到时用首条提问兜底，只对还没有标题的会话生效
+        if (titleRequests.has(controller) && !controller.signal.aborted && !get().importingHistory) {
+          const fallback = createLocalTitle(prepared.question.content)
+          if (fallback) {
+            updateSession(sessionId, (session) =>
+              session.title ? session : { ...session, title: fallback }
+            )
+          }
+          titleRequests.delete(controller)
+        }
         break
       } catch (error) {
         if (controller.signal.aborted) {
@@ -1042,7 +1071,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reply = settleReply(reply, 'error', Date.now(), {
             kind: 'upload',
             message: '',
-            localMessage: describeUploadError(error),
+            localMessage:
+              error instanceof ApiError && error.localMessage
+                ? error.localMessage
+                : describeUploadError(error),
             retryable: isRetryableApiError(error),
           })
           break
