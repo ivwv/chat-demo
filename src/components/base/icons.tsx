@@ -523,3 +523,27 @@ export const IconToastError16 = () => (
     />
   </svg>
 )
+
+/** 服务商：两层堆叠的机架，用于设置里的服务商分组 */
+export const IconServerOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2.9 1.8h10.2c.61 0 1.1.49 1.1 1.1v3.1c0 .61-.49 1.1-1.1 1.1H2.9c-.61 0-1.1-.49-1.1-1.1V2.9c0-.61.49-1.1 1.1-1.1zm.1 1.4v2.5h10V3.2H3zM2.9 8.9h10.2c.61 0 1.1.49 1.1 1.1v3.1c0 .61-.49 1.1-1.1 1.1H2.9c-.61 0-1.1-.49-1.1-1.1v-3.1c0-.61.49-1.1 1.1-1.1zm.1 1.4v2.5h10v-2.5H3z"
+      fill="currentColor"
+    />
+    <path
+      d="M5 3.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zM5 10.4a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+/** 添加：细线加号 */
+export const IconPlusOutline14 = () => (
+  <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M7 1.4c.36 0 .65.29.65.65v4.3h4.3a.65.65 0 0 1 0 1.3h-4.3v4.3a.65.65 0 0 1-1.3 0v-4.3h-4.3a.65.65 0 0 1 0-1.3h4.3v-4.3c0-.36.29-.65.65-.65z"
+      fill="currentColor"
+    />
+  </svg>
+)
