@@ -9,3 +9,5 @@ build/
 .env.*
 !.env.example
 tmp/
+ai-config.yaml
+ai-context.md
