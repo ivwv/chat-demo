@@ -2,11 +2,25 @@
   margin-bottom: 10px;
 }
 
+/**
+ * 思考标题同时是折叠开关。长思考时吸在滚动容器顶部，
+ * 用户看到一半也能随时点一下收起，不用先滚回开头。
+ */
 .title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   height: 34px;
   margin-bottom: 2px;
+  /* 盖住从下面滚过的思考正文，末尾留一点淡出，避免生硬切断 */
+  background: linear-gradient(
+    to bottom,
+    var(--dsw-alias-bg-base) 0,
+    var(--dsw-alias-bg-base) calc(100% - 8px),
+    transparent 100%
+  );
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   user-select: none;
@@ -14,6 +28,12 @@
 
   &:hover {
     color: var(--dsw-alias-label-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-alias-button-primary-fill);
+    outline-offset: 2px;
+    border-radius: 8px;
   }
 }
 

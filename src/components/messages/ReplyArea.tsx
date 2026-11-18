@@ -64,21 +64,36 @@ export const ReplyArea = memo(function ReplyArea({
   streaming: boolean
   hasResponse: boolean
 }) {
-  useTranslate()
+  const t = useTranslate()
   const [open, setOpen] = useState(true)
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
   }
-  // 未记录请求开关时，按是否有思考内容显示标题。
-  const thinking = message.thinking ?? view.steps.some((step) => step.type === 'thinking')
+  // 只要真的收到了思考内容就给折叠标题：有的兼容网关即使没开深度思考也会回推理内容，
+  // 只看请求开关会把这些内容摊开且没有收起入口。
+  const thinking = message.thinking === true || view.steps.some((step) => step.type === 'thinking')
   const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
+  const toggle = () => setOpen((value) => !value)
   return (
     <div className={styles.area}>
       {title ? (
-        <div className={styles.title} onClick={() => setOpen((value) => !value)}>
+        <div
+          className={styles.title}
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          title={t(open ? 'collapseThinking' : 'expandThinking')}
+          onClick={toggle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              toggle()
+            }
+          }}
+        >
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>
             <IconThinkOutline16 />
           </span>

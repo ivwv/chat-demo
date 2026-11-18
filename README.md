@@ -32,7 +32,7 @@ The output is written to `dist/`. Deploy it to a static web server or open `dist
 - Multiple providers and models: each provider holds any number of models, switched with a two-level picker in the composer and searchable by fuzzy match.
 - Prompt presets: switch them next to the search toggle; the selected preset is sent as the system prompt.
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
-- Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
+- Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies. Reasoning can be collapsed — for long traces the toggle sticks to the top so you can close it at any point.
 - Images and text files are sent inline with the message, so they work across providers; large pastes collapse into a placeholder card that can be restored or previewed.
 - Every reply reports token usage and throughput, and the header shows the running total for the current branch.
 - Markdown, syntax highlighting, KaTeX math, and Mermaid diagrams.

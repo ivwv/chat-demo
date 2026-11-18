@@ -78,6 +78,8 @@ export const zh = {
   replyRefused: '你好，这个问题我暂时无法回答，让我们换个话题再聊聊吧。',
   messageThinkDuration: '已思考（用时 {count} 秒）',
   messageThinkDurationPlural: '已思考（用时 {count} 秒）',
+  collapseThinking: '折叠思考过程',
+  expandThinking: '展开思考过程',
   messageThinkStopped: '已停止',
   deepSearchSearching: '正在搜索',
   groupTitleToolOpen: '正在浏览网页',

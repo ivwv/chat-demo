@@ -86,6 +86,8 @@ export const en = {
   replyRefused: "Sorry, that's beyond my current scope. Let's talk about something else.",
   messageThinkDuration: 'Thought for {count} second',
   messageThinkDurationPlural: 'Thought for {count} seconds',
+  collapseThinking: 'Collapse thinking',
+  expandThinking: 'Expand thinking',
   messageThinkStopped: 'Stopped',
   deepSearchSearching: 'Searching the web',
   groupTitleToolOpen: 'Browsing the web',
