@@ -270,8 +270,9 @@ export const zh = {
   messageStatDuration: "用时 {seconds}s",
   messageStatTitle:
     "模型 {model}\n输入 {input} · 输出 {output}\n缓存读取 {cacheRead} · 缓存写入 {cacheWrite}\n用时 {seconds} 秒 · 平均 {speed} tok/s",
-  sessionUsage: "本会话 {count} tokens",
-  sessionUsageTitle: "输入 {input} · 输出 {output} · 缓存 {cache}",
+  sessionUsage: "上下文 {count} tokens",
+  sessionUsageTitle:
+    "当前上下文：输入 {input} · 输出 {output}；累计消耗：输入 {totalInput} · 输出 {totalOutput} · 缓存 {cache}",
   deactivatedSearchTooltip: "按需搜索网页",
   search: "智能搜索",
   uploadFile: "上传文件",

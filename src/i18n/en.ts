@@ -286,8 +286,9 @@ export const en = {
   messageStatDuration: 'took {seconds}s',
   messageStatTitle:
     'Model {model}\nInput {input} · Output {output}\nCache read {cacheRead} · Cache write {cacheWrite}\nTook {seconds}s · {speed} tok/s average',
-  sessionUsage: '{count} tokens in this chat',
-  sessionUsageTitle: 'Input {input} · Output {output} · Cached {cache}',
+  sessionUsage: '{count} tokens in context',
+  sessionUsageTitle:
+    'Context: input {input} · output {output}; Total used: input {totalInput} · output {totalOutput} · cached {cache}',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
   uploadFile: 'Upload files',
