@@ -551,6 +551,8 @@ const buildTitleDigest = (messages: Message[]): string => {
 const cleanTitle = (raw: string) => {
   const text = raw
     .replace(/^\s*(标题|title)\s*[:：]\s*/i, '')
+    // 去掉模型偶尔加上的 Markdown 标记
+    .replace(/[*_`#>]+/g, '')
     .replace(/^["'“”‘’《》\s]+|["'“”‘’《》\s]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -600,7 +602,8 @@ export const generateTitleWithAi = async (sessionId: string): Promise<boolean> =
         messages: [{ role: 'user', content: digest }],
         thinking: false,
         search: false,
-        maxTokens: 64,
+        // 思考模型会先把额度用在推理上，给太小会只剩空正文
+        maxTokens: 1024,
       },
       controller.signal
     )
@@ -618,6 +621,7 @@ export const generateTitleWithAi = async (sessionId: string): Promise<boolean> =
     persist(sessionId)
     return true
   } catch {
+    // 不打断用户操作，失败提示由调用方展示
     return false
   } finally {
     set((state) => ({

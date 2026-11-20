@@ -45,6 +45,11 @@
   margin-left: 4px;
 }
 
+/* 菜单打开期间保持可见：鼠标移入浮层后会失去 :hover，锚点不能消失 */
+.action.actionOpen {
+  display: flex;
+}
+
 .renameInput {
   box-sizing: border-box;
   width: 100%;

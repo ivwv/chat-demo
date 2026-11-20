@@ -31,6 +31,8 @@ export const SessionItem = memo(function SessionItem({
 }) {
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
+  // 菜单打开后鼠标会移入浮层，会话项失去 hover；保持操作区可见，避免锚点尺寸归零导致菜单跳位
+  const [menuOpen, setMenuOpen] = useState(false)
   const naming = useChatStore((state) => state.naming[session.id] === true)
   const displayTitle = session.title || t('untitledChat')
 
@@ -68,8 +70,12 @@ export const SessionItem = memo(function SessionItem({
       }}
     >
       <div className={styles.title}>{displayTitle}</div>
-      <div className={styles.action} onClick={(event) => event.stopPropagation()}>
+      <div
+        className={clsx(styles.action, menuOpen && styles.actionOpen)}
+        onClick={(event) => event.stopPropagation()}
+      >
         <Menu
+          onOpenChange={setMenuOpen}
           options={[
             {
               key: 'ai-rename',

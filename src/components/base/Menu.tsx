@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from './anchored.js'
 import styles from './Menu.module.css'
@@ -16,12 +16,18 @@ export type MenuOption = {
 export const Menu = ({
   options,
   children,
+  onOpenChange,
 }: {
   options: MenuOption[]
   children: (props: { open: boolean; toggle: () => void }) => ReactNode
+  /** 打开状态变化时通知调用方，供「悬停才显示」的触发区在菜单打开期间保持可见 */
+  onOpenChange?: (open: boolean) => void
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
+  useEffect(() => {
+    onOpenChange?.(open)
+  }, [onOpenChange, open])
   // 左侧对齐并再左移 5px，让菜单文字与触发元素图标对齐
   const { anchorRef, floatingRef, position } = useAnchoredPosition<HTMLSpanElement, HTMLDivElement>(
     open,
