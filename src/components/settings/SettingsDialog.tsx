@@ -20,6 +20,12 @@ import {
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
+  applySettingsBackup,
+  exportSettingsBackup,
+  parseSettingsBackup,
+  type SettingsBackup,
+} from '../../services/settingsBackup.js'
+import {
   isChineseBrowser,
   setLocale,
   setLocation,
@@ -125,6 +131,7 @@ const SettingsContent = () => {
             <>
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
+              <SettingsBackupSection disabled={historyBusy} />
               <SettingCell
                 label={t('deleteAllSessions')}
                 status={null}
@@ -622,5 +629,111 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
         </Button>
       }
     />
+  )
+}
+
+/** 服务商与偏好设置的导出/导入：导入会覆盖当前配置并刷新页面 */
+const SettingsBackupSection = ({ disabled }: { disabled: boolean }) => {
+  const t = useTranslate()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [status, setStatus] = useState<Status>(null)
+  const [pending, setPending] = useState<SettingsBackup | null>(null)
+
+  const onExport = () => {
+    try {
+      const { name, blob } = exportSettingsBackup()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      setStatus(null)
+    } catch (error) {
+      setStatus(errorStatus('settingsBackupExportFailed', error))
+    }
+  }
+
+  const onPick = async (file: File) => {
+    const text = await file.text().catch(() => '')
+    const backup = parseSettingsBackup(text)
+    if (!backup) {
+      setStatus({ key: 'settingsBackupImportInvalid', error: true })
+      return
+    }
+    setStatus(null)
+    setPending(backup)
+  }
+
+  return (
+    <>
+      <SettingCell
+        label={t('settingsBackupExportLabel')}
+        description={t('settingsBackupExportDescription')}
+        status={status}
+        action={
+          <Button
+            variant="outlined"
+            size="m"
+            className={styles.cellButton}
+            disabled={disabled}
+            onClick={onExport}
+          >
+            <IconDownloadOutline16 />
+            {t('settingsBackupExportAction')}
+          </Button>
+        }
+      />
+      <SettingCell
+        label={t('settingsBackupImportLabel')}
+        description={t('settingsBackupImportDescription')}
+        status={null}
+        action={
+          <>
+            <Button
+              variant="outlined"
+              size="m"
+              className={clsx(styles.cellButton, styles.uploadButton)}
+              disabled={disabled}
+              onClick={() => inputRef.current?.click()}
+            >
+              <IconUploadOutline14 />
+              {t('settingsBackupImportAction')}
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) {
+                  void onPick(file)
+                }
+              }}
+            />
+          </>
+        }
+      />
+      {pending ? (
+        <Modal
+          title={t('settingsBackupImportConfirmTitle')}
+          onClose={() => setPending(null)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setPending(null)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="danger" onClick={() => applySettingsBackup(pending)}>
+                {t('settingsBackupImportAction')}
+              </Button>
+            </>
+          }
+        >
+          {t('settingsBackupImportConfirmDescription')}
+        </Modal>
+      ) : null}
+    </>
   )
 }

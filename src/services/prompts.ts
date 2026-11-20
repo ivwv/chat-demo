@@ -85,6 +85,35 @@ const commit = (prompts: CustomPrompt[]) => {
   useCustomPrompts.setState({ prompts })
 }
 
+/** 设置导出用：读取当前自定义提示词 */
+export const readCustomPrompts = (): CustomPrompt[] => useCustomPrompts.getState().prompts
+
+/** 设置导入用：整批替换，非法项直接丢弃 */
+export const replaceCustomPrompts = (prompts: unknown[]) => {
+  commit(
+    prompts.flatMap((item): CustomPrompt[] => {
+      if (typeof item !== 'object' || item === null) {
+        return []
+      }
+      const record = item as { id?: unknown; name?: unknown; content?: unknown }
+      if (
+        typeof record.id !== 'string' ||
+        !record.id.startsWith(CUSTOM_PREFIX) ||
+        typeof record.content !== 'string'
+      ) {
+        return []
+      }
+      return [
+        {
+          id: record.id,
+          name: typeof record.name === 'string' ? record.name : '',
+          content: record.content,
+        },
+      ]
+    })
+  )
+}
+
 /** 内置 + 自定义；调用方订阅 useCustomPrompts 后即可在增删改时重新渲染 */
 export const listPrompts = (): PromptOption[] => [
   ...BUILTIN_PROMPTS.map((preset) => ({

@@ -207,6 +207,19 @@ export const en = {
   historyExportDescription:
     'Includes all chat history and locally stored images. Other attachments retain file details only. Your API Key is not included.',
   exportAllDownload: 'Download',
+  settingsBackupExportLabel: 'Export settings',
+  settingsBackupExportDescription:
+    'Includes providers with API keys, prompts, and UI preferences. The file contains secrets — keep it safe.',
+  settingsBackupExportAction: 'Export',
+  settingsBackupExportFailed: 'Failed to export settings: {message}',
+  settingsBackupImportLabel: 'Import settings',
+  settingsBackupImportDescription:
+    'Restore providers and preferences from an exported JSON file. This overwrites the current setup and reloads the page.',
+  settingsBackupImportAction: 'Import',
+  settingsBackupImportInvalid: 'Unrecognized file. Choose a settings file exported from this app.',
+  settingsBackupImportConfirmTitle: 'Import settings?',
+  settingsBackupImportConfirmDescription:
+    'This overwrites your providers, models, and preferences. The page will reload afterwards.',
   deleteAllSessions: 'Delete all chats',
   deleteAllSessionsModalTitle: 'Once deleted, all chats will be cleared and cannot be recovered.',
   deleteAllSessionsModalDescription:

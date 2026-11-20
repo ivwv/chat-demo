@@ -193,6 +193,19 @@ export const zh = {
   historyExportDescription:
     "包含所有历史对话及本地图片原件；其他附件仅保留文件信息，不包含 API Key。",
   exportAllDownload: "下载",
+  settingsBackupExportLabel: "导出设置",
+  settingsBackupExportDescription:
+    "包含服务商与 API Key、提示词及界面偏好；文件含密钥，请妥善保管。",
+  settingsBackupExportAction: "导出",
+  settingsBackupExportFailed: "导出设置失败：{message}",
+  settingsBackupImportLabel: "导入设置",
+  settingsBackupImportDescription:
+    "从导出的 JSON 恢复服务商与设置，会覆盖当前配置；导入后页面刷新。",
+  settingsBackupImportAction: "导入",
+  settingsBackupImportInvalid: "文件无法识别，请选择本应用导出的设置文件",
+  settingsBackupImportConfirmTitle: "导入设置？",
+  settingsBackupImportConfirmDescription:
+    "将覆盖当前服务商、模型与偏好设置，导入后页面会自动刷新。",
   deleteAllSessions: "删除所有对话",
   deleteAllSessionsModalTitle: "删除后，所有对话都将被清空且无法找回",
   deleteAllSessionsModalDescription: "本地保存的附件及未发送的草稿也将被删除。",
