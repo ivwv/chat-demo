@@ -576,7 +576,10 @@ const resolveTitleSelection = () => {
  * 用所选模型给会话生成标题：只发截取后的对话摘要，收齐流式文本后取标题。
  * 返回是否成功，失败提示由调用方决定。
  */
-export const generateTitleWithAi = async (sessionId: string): Promise<boolean> => {
+export const generateTitleWithAi = async (
+  sessionId: string,
+  options?: { onlyIfTitle?: string }
+): Promise<boolean> => {
   if (get().naming[sessionId] || get().importingHistory || deletingSessions.has(sessionId)) {
     return false
   }
@@ -615,6 +618,13 @@ export const generateTitleWithAi = async (sessionId: string): Promise<boolean> =
     }
     const title = cleanTitle(raw)
     if (!title) {
+      return false
+    }
+    // 自动命名期间用户手动改过标题，放弃覆盖
+    if (
+      options?.onlyIfTitle !== undefined &&
+      getSession(sessionId)?.title !== options.onlyIfTitle
+    ) {
       return false
     }
     updateSession(sessionId, (current) => ({ ...current, title }))
@@ -1281,13 +1291,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
         }
         reply = settleReply(reply, 'done', Date.now())
-        // 服务端标题优先；没拿到时用首条提问兜底，只对还没有标题的会话生效
+        // 服务端标题优先；没拿到时先落首条提问兜底，再用命名模型自动生成
         if (titleRequests.has(controller) && !controller.signal.aborted && !get().importingHistory) {
           const fallback = createLocalTitle(prepared.request.question.content)
-          if (fallback) {
+          const titled = Boolean(getSession(sessionId)?.title)
+          if (!titled && fallback) {
             updateSession(sessionId, (session) =>
               session.title ? session : { ...session, title: fallback }
             )
+            // 后台生成；期间用户手动改名则放弃覆盖
+            void generateTitleWithAi(sessionId, { onlyIfTitle: fallback })
           }
           titleRequests.delete(controller)
         }
