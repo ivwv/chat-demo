@@ -21,7 +21,13 @@ import {
   setDraftText,
   useDrafts,
 } from '../../services/chat/drafts.js'
-import { getActiveFileMode, getActiveProvider, useCapability } from '../../services/providers/store.js'
+import {
+  getActiveFileMode,
+  getActiveProvider,
+  setActiveKey,
+  useCapability,
+  useProviders,
+} from '../../services/providers/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
@@ -73,6 +79,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
   const thinking = useSettings((state) => state.thinking)
+  const activeKey = useProviders((state) => state.activeKey)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -268,7 +275,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         </div>
       </div>
       <div className={styles.functionRow}>
-        <ModelPicker />
+        <ModelPicker value={activeKey} onChange={setActiveKey} />
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
           <Tooltip content={t(canThink ? 'deactivatedThinkTooltip' : 'unsupportedThinkTooltip')}>

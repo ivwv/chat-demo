@@ -15,7 +15,7 @@ import {
   IconSearchOutline16,
 } from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
-import { setActiveKey, useProviders } from '../../services/providers/store.js'
+import { useProviders } from '../../services/providers/store.js'
 import { fuzzyScore } from '../../utils/fuzzy.js'
 import styles from './ModelPicker.module.css'
 
@@ -30,16 +30,38 @@ type Candidate = {
   providerName: string
   label: string
   modelId: string
+  /** 置顶的额外选项（如「跟随当前模型」），不参与服务商分组 */
+  extra?: boolean
 }
 
+export type ModelPickerOption = { key: string; label: string }
+
 /**
- * 模型选择器：按服务商分组的下拉，服务商多、模型多时仍能一眼看出「哪个模型属于哪家」。
- * 输入关键词后改为模糊匹配的平铺列表，模型名、服务商名、模型 id 任一命中即可。
+ * 模型选择器：按服务商分组的下拉，带搜索与键盘导航。
+ * `value` / `onChange` 受控，聊天输入框与设置页共用同一套交互。
  */
-export const ModelPicker = () => {
+export const ModelPicker = ({
+  value,
+  onChange,
+  placeholder,
+  extraOptions,
+  menuSide = 'top',
+  ariaLabel,
+  className,
+}: {
+  /** 当前值：`providerId::modelId`，或 extraOptions 里的 key */
+  value: string | null
+  onChange: (key: string) => void
+  /** 没有任何匹配时触发器显示的文字；也为空时不渲染 */
+  placeholder?: string
+  /** 置顶的额外选项，搜索时同样参与匹配 */
+  extraOptions?: ModelPickerOption[]
+  menuSide?: 'top' | 'bottom'
+  ariaLabel?: string
+  className?: string
+}) => {
   const t = useTranslate()
   const providers = useProviders((state) => state.providers)
-  const activeKey = useProviders((state) => state.activeKey)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -52,19 +74,19 @@ export const ModelPicker = () => {
   const { anchorRef, floatingRef, position } = useAnchoredPosition<
     HTMLButtonElement,
     HTMLDivElement
-  >(open, { side: 'top', align: 'end', maxHeight: 360, minSpace: 200 })
+  >(open, { side: menuSide, align: 'end', maxHeight: 360, minSpace: 200 })
   useDismiss(open, [anchorRef, floatingRef], () => setOpen(false), { captureEscape: true })
 
-  const active = providers.find((provider) =>
-    activeKey?.startsWith(`${provider.id}${SEPARATOR}`)
-  )
-  const activeModel = active?.models.find(
-    (model) => activeKey === `${active.id}${SEPARATOR}${model.id}`
-  )
-
   const candidates = useMemo<Candidate[]>(
-    () =>
-      providers.flatMap((provider) =>
+    () => [
+      ...(extraOptions ?? []).map((option) => ({
+        key: option.key,
+        providerName: '',
+        label: option.label,
+        modelId: '',
+        extra: true,
+      })),
+      ...providers.flatMap((provider) =>
         provider.models.map((model) => ({
           key: `${provider.id}${SEPARATOR}${model.id}`,
           providerName: provider.name,
@@ -72,10 +94,11 @@ export const ModelPicker = () => {
           modelId: model.id,
         }))
       ),
-    [providers]
+    ],
+    [extraOptions, providers]
   )
 
-  /** 有关键词时按分数排序，没有则保持服务商分组顺序 */
+  /** 有关键词时按分数排序，没有则保持「额外选项 + 服务商分组」顺序 */
   const matches = useMemo(() => {
     if (!query.trim()) {
       return null
@@ -83,11 +106,13 @@ export const ModelPicker = () => {
     return candidates
       .map((item) => ({
         item,
-        score: Math.max(
-          fuzzyScore(query, item.label),
-          fuzzyScore(query, item.modelId),
-          fuzzyScore(query, item.providerName)
-        ),
+        score: item.extra
+          ? fuzzyScore(query, item.label)
+          : Math.max(
+              fuzzyScore(query, item.label),
+              fuzzyScore(query, item.modelId),
+              fuzzyScore(query, item.providerName)
+            ),
       }))
       .filter((entry) => entry.score >= 0)
       .sort((a, b) => b.score - a.score)
@@ -95,6 +120,9 @@ export const ModelPicker = () => {
   }, [candidates, query])
 
   const visible = matches ?? candidates
+
+  const selected = candidates.find((item) => item.key === value)
+  const triggerLabel = selected?.label ?? placeholder ?? ''
 
   // 打开或清空搜索时，键盘高亮直接落到当前选中的模型；输入关键词后从第一条开始
   useLayoutEffect(() => {
@@ -105,9 +133,9 @@ export const ModelPicker = () => {
       setActiveIndex(0)
       return
     }
-    const index = visible.findIndex((item) => item.key === activeKey)
+    const index = visible.findIndex((item) => item.key === value)
     setActiveIndex(index >= 0 ? index : 0)
-  }, [open, query, visible, activeKey])
+  }, [open, query, value, visible])
 
   // 首次打开把选中项滚到列表中间；之后键盘移动只做最小滚动，避免列表大幅跳动
   useEffect(() => {
@@ -159,19 +187,18 @@ export const ModelPicker = () => {
     }
   }, [open])
 
-  if (!active || !activeModel) {
+  if (!triggerLabel) {
     return null
   }
 
   const select = (key: string) => {
-    setActiveKey(key)
+    onChange(key)
     setOpen(false)
   }
 
   /**
-   * 打开前同步归位：清空搜索并把高亮放到当前模型。
-   * 否则首次渲染会沿用上一次的 activeIndex（可能是搜索结果里的索引），
-   * 滚动 effect 先按错误位置滚一次，随后才被修正，表现为抖动。
+   * 打开前同步归位：清空搜索并把高亮放到当前值。
+   * 否则首次渲染会沿用上一次的 activeIndex，滚动 effect 先按错误位置滚一次再修正，表现为抖动。
    */
   const toggle = () => {
     if (open) {
@@ -179,7 +206,7 @@ export const ModelPicker = () => {
       return
     }
     setQuery('')
-    const index = candidates.findIndex((item) => item.key === activeKey)
+    const index = candidates.findIndex((item) => item.key === value)
     setActiveIndex(index >= 0 ? index : 0)
     setOpen(true)
   }
@@ -208,19 +235,55 @@ export const ModelPicker = () => {
     }
   }
 
+  const indexByKey = new Map(visible.map((item, index) => [item.key, index]))
+  const candidateByKey = new Map(candidates.map((item) => [item.key, item]))
+  const triggerTitle = selected
+    ? selected.extra
+      ? selected.label
+      : fullModelTitle(selected.label, selected.modelId)
+    : undefined
+
+  const renderOption = (item: Candidate, index: number) => (
+    <button
+      key={item.key || '__current__'}
+      ref={index === activeIndex ? activeItemRef : undefined}
+      type="button"
+      role="menuitemradio"
+      aria-checked={item.key === value}
+      title={item.extra ? item.label : fullModelTitle(item.label, item.modelId)}
+      className={clsx(
+        styles.option,
+        item.key === value && styles.optionSelected,
+        index === activeIndex && styles.optionActive
+      )}
+      onMouseEnter={() => setActiveIndex(index)}
+      onClick={() => select(item.key)}
+    >
+      <span className={styles.optionLabel}>{item.label}</span>
+      {item.extra ? null : (
+        <span className={styles.optionHint} title={item.providerName}>
+          {item.providerName}
+        </span>
+      )}
+      {item.key === value ? <IconCheckOutline16 /> : null}
+    </button>
+  )
+
+  const extraCandidates = candidates.filter((item) => item.extra)
+
   return (
     <>
       <button
         ref={anchorRef}
         type="button"
-        className={clsx(styles.trigger, open && styles.triggerOpen)}
-        aria-label={t('modelSelectorLabel')}
-        title={fullModelTitle(activeModel.label, activeModel.id)}
+        className={clsx(styles.trigger, open && styles.triggerOpen, className)}
+        aria-label={ariaLabel ?? t('modelSelectorLabel')}
+        title={triggerTitle}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggle}
       >
-        <span className={styles.triggerText}>{activeModel.label}</span>
+        <span className={styles.triggerText}>{triggerLabel}</span>
         <span className={styles.arrow}>
           <IconChevronDownOutline14 />
         </span>
@@ -252,63 +315,30 @@ export const ModelPicker = () => {
                   matches.length === 0 ? (
                     <div className={styles.empty}>{t('modelSearchEmpty')}</div>
                   ) : (
-                    matches.map((item, index) => (
-                      <button
-                        key={item.key}
-                        ref={index === activeIndex ? activeItemRef : undefined}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={item.key === activeKey}
-                        title={fullModelTitle(item.label, item.modelId)}
-                        className={clsx(
-                          styles.option,
-                          item.key === activeKey && styles.optionSelected,
-                          index === activeIndex && styles.optionActive
-                        )}
-                        onMouseEnter={() => setActiveIndex(index)}
-                        onClick={() => select(item.key)}
-                      >
-                        <span className={styles.optionLabel}>{item.label}</span>
-                        <span className={styles.optionHint} title={item.providerName}>
-                          {item.providerName}
-                        </span>
-                        {item.key === activeKey ? <IconCheckOutline16 /> : null}
-                      </button>
-                    ))
+                    matches.map((item, index) => renderOption(item, index))
                   )
                 ) : (
-                  providers.map((provider) => (
-                    <div key={provider.id} className={styles.group}>
-                      <div className={styles.groupName} title={provider.name}>
-                        {provider.name}
+                  <>
+                    {extraCandidates.length > 0 ? (
+                      <div className={styles.group}>
+                        {extraCandidates.map((item) =>
+                          renderOption(item, indexByKey.get(item.key) ?? 0)
+                        )}
                       </div>
-                      {provider.models.map((model) => {
-                        const key = `${provider.id}${SEPARATOR}${model.id}`
-                        const selected = key === activeKey
-                        const index = visible.findIndex((item) => item.key === key)
-                        return (
-                          <button
-                            key={key}
-                            ref={index === activeIndex ? activeItemRef : undefined}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            title={fullModelTitle(model.label, model.id)}
-                            className={clsx(
-                              styles.option,
-                              selected && styles.optionSelected,
-                              index === activeIndex && styles.optionActive
-                            )}
-                            onMouseEnter={() => setActiveIndex(index)}
-                            onClick={() => select(key)}
-                          >
-                            <span className={styles.optionLabel}>{model.label}</span>
-                            {selected ? <IconCheckOutline16 /> : null}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ))
+                    ) : null}
+                    {providers.map((provider) => (
+                      <div key={provider.id} className={styles.group}>
+                        <div className={styles.groupName} title={provider.name}>
+                          {provider.name}
+                        </div>
+                        {provider.models.map((model) => {
+                          const key = `${provider.id}${SEPARATOR}${model.id}`
+                          const item = candidateByKey.get(key)
+                          return item ? renderOption(item, indexByKey.get(key) ?? 0) : null
+                        })}
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             </div>,

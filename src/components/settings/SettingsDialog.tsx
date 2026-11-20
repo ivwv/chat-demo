@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   IconDarkOutline16,
   IconDataOutline16,
@@ -19,7 +19,6 @@ import {
 } from '../../services/chat/backup.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
-import { useProviders } from '../../services/providers/store.js'
 import {
   isChineseBrowser,
   setLocale,
@@ -35,6 +34,7 @@ import { useTranslate, type TranslationKey, type TranslationMessage } from '../.
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
+import { ModelPicker } from '../chatInput/ModelPicker.js'
 import { showToast } from '../base/toastState.js'
 import { PromptsSection } from './PromptsSection.js'
 import { ProvidersSection } from './ProvidersSection.js'
@@ -312,26 +312,24 @@ const LocaleSetting = () => {
 /** AI 会话命名：选一个模型专用于生成标题；跟随当前模型时用底部选中的模型 */
 const AiTitleSetting = () => {
   const t = useTranslate()
-  const providers = useProviders((state) => state.providers)
   const titleModelKey = useSettings((state) => state.titleModelKey)
+  const extraOptions = useMemo(
+    () => [{ key: '', label: t('settingsAiTitleModelFollow') }],
+    [t]
+  )
   return (
     <SettingCell
       label={t('settingsAiTitleModel')}
       status={null}
       action={
-        <Select
-          ariaLabel={t('settingsAiTitleModel')}
+        <ModelPicker
           value={titleModelKey}
-          options={[
-            { value: '', label: t('settingsAiTitleModelFollow') },
-            ...providers.flatMap((provider) =>
-              provider.models.map((model) => ({
-                value: `${provider.id}::${model.id}`,
-                label: `${provider.name} · ${model.label}`,
-              }))
-            ),
-          ]}
           onChange={setTitleModelKey}
+          ariaLabel={t('settingsAiTitleModel')}
+          placeholder={t('settingsAiTitleModelFollow')}
+          extraOptions={extraOptions}
+          menuSide="bottom"
+          className={styles.settingPicker}
         />
       }
     />

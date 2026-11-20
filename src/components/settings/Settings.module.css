@@ -574,3 +574,8 @@
   font-size: 12px;
   line-height: 18px;
 }
+
+/* 设置行里的模型选择器：给左侧标签留空间，长模型名在触发器内省略 */
+.settingPicker {
+  max-width: 220px;
+}
