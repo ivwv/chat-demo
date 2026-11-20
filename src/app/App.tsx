@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
   bindChatPersistence,
   initChat,
+  newChat,
   retrySaveSessions,
   selectSession,
   useChatStore,
 } from '../services/chat/store.js'
+import { readSessionIdFromUrl, writeSessionIdToUrl } from './sessionRoute.js'
 import { SearchPanel } from '../components/search/SearchPanel.js'
 import { closeSearchPanel } from '../components/search/searchPanelState.js'
 import { SessionView } from '../components/session/SessionView.js'
@@ -67,10 +69,55 @@ export const App = () => {
   // 移动端选中会话、切换布局后收起抽屉
   useEffect(closeMobileSider, [activeId, isMobile])
 
+  const restoredRef = useRef(false)
+
   useEffect(() => {
-    void initChat()
+    // 地址里带着会话 id 时优先恢复，刷新后不用再手动切换
+    void initChat().then(() => {
+      if (restoredRef.current) {
+        return
+      }
+      restoredRef.current = true
+      const id = readSessionIdFromUrl()
+      if (!id) {
+        return
+      }
+      if (useChatStore.getState().sessions.some((session) => session.id === id)) {
+        selectSession(id)
+      } else {
+        // id 对应不上任何会话：留在新会话，并清掉地址里的 id
+        writeSessionIdToUrl(null)
+      }
+    })
     // 首次打开先在设置里输入 API Key
     ensureProvider()
+  }, [])
+
+  // 切换会话时同步地址栏，刷新后可回到当前会话
+  useEffect(() => {
+    if (restoredRef.current) {
+      writeSessionIdToUrl(activeId)
+    }
+  }, [activeId])
+
+  // 浏览器前进/后退或手动改 hash：有效就切换，无效回退到新会话
+  useEffect(() => {
+    const onHashChange = () => {
+      if (!restoredRef.current) {
+        return
+      }
+      const id = readSessionIdFromUrl()
+      if (id && useChatStore.getState().sessions.some((session) => session.id === id)) {
+        selectSession(id)
+        return
+      }
+      if (id) {
+        writeSessionIdToUrl(null)
+      }
+      newChat()
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
   return (
