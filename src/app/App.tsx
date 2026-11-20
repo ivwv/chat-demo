@@ -58,6 +58,13 @@ export const App = () => {
     document.documentElement.lang = locale
   }, [locale])
 
+  // 浏览器标签页标题跟随当前会话名；新会话显示应用名
+  const sessionTitle = session?.title.trim() ?? ''
+  useEffect(() => {
+    const appName = t('appName')
+    document.title = sessionTitle ? `${sessionTitle} - ${appName}` : appName
+  }, [sessionTitle, t])
+
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])
   useEffect(bindChatPersistence, [])
