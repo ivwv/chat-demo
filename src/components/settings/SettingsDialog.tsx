@@ -725,8 +725,11 @@ const SettingsBackupSection = ({ disabled }: { disabled: boolean }) => {
               <Button variant="outlined" onClick={() => setPending(null)}>
                 {t('cancel')}
               </Button>
-              <Button variant="danger" onClick={() => applySettingsBackup(pending)}>
-                {t('settingsBackupImportAction')}
+              <Button variant="outlined" onClick={() => applySettingsBackup(pending, 'merge')}>
+                {t('settingsBackupImportMerge')}
+              </Button>
+              <Button variant="danger" onClick={() => applySettingsBackup(pending, 'replace')}>
+                {t('settingsBackupImportReplace')}
               </Button>
             </>
           }

@@ -214,12 +214,14 @@ export const en = {
   settingsBackupExportFailed: 'Failed to export settings: {message}',
   settingsBackupImportLabel: 'Import settings',
   settingsBackupImportDescription:
-    'Restore providers and preferences from an exported JSON file. This overwrites the current setup and reloads the page.',
+    'Restore providers and preferences from an exported JSON file. Choose merge or replace; the page reloads afterwards.',
   settingsBackupImportAction: 'Import',
+  settingsBackupImportMerge: 'Merge import',
+  settingsBackupImportReplace: 'Replace import',
   settingsBackupImportInvalid: 'Unrecognized file. Choose a settings file exported from this app.',
   settingsBackupImportConfirmTitle: 'Import settings?',
   settingsBackupImportConfirmDescription:
-    'This overwrites your providers, models, and preferences. The page will reload afterwards.',
+    'Merge: adds providers and prompts, updates matching ids, and keeps local-only items and UI preferences. Replace: overwrites all providers and settings with the file contents.',
   deleteAllSessions: 'Delete all chats',
   deleteAllSessionsModalTitle: 'Once deleted, all chats will be cleared and cannot be recovered.',
   deleteAllSessionsModalDescription:

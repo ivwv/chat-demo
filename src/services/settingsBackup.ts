@@ -1,6 +1,6 @@
 import { useProviders } from './providers/store.js'
 import type { ProviderConfig } from './providers/types.js'
-import { readCustomPrompts, replaceCustomPrompts } from './prompts.js'
+import { readCustomPrompts, replaceCustomPrompts, type CustomPrompt } from './prompts.js'
 import {
   setLocale,
   setLocation,
@@ -122,14 +122,78 @@ export const parseSettingsBackup = (text: string): SettingsBackup | null => {
   }
 }
 
+/** 导入方式：replace 整体替换；merge 保留本机独有的服务商/提示词，同 id 用导入值更新 */
+export type SettingsImportMode = 'replace' | 'merge'
+
+const mergeProviders = (local: ProviderConfig[], incoming: ProviderConfig[]): ProviderConfig[] => {
+  const merged = new Map(local.map((provider) => [provider.id, provider]))
+  for (const provider of incoming) {
+    const existing = merged.get(provider.id)
+    if (!existing) {
+      merged.set(provider.id, provider)
+      continue
+    }
+    // 同 id：字段取导入值，模型按 id 取并集
+    const models = [...existing.models]
+    for (const model of provider.models) {
+      const index = models.findIndex((item) => item.id === model.id)
+      if (index >= 0) {
+        models[index] = model
+      } else {
+        models.push(model)
+      }
+    }
+    merged.set(provider.id, { ...existing, ...provider, models })
+  }
+  return [...merged.values()]
+}
+
+const mergePrompts = (incoming: unknown[]): CustomPrompt[] => {
+  const merged = new Map(readCustomPrompts().map((prompt) => [prompt.id, prompt]))
+  for (const item of incoming) {
+    if (typeof item !== 'object' || item === null) {
+      continue
+    }
+    const record = item as { id?: unknown; name?: unknown; content?: unknown }
+    if (
+      typeof record.id !== 'string' ||
+      !record.id.startsWith('custom-') ||
+      typeof record.content !== 'string'
+    ) {
+      continue
+    }
+    merged.set(record.id, {
+      id: record.id,
+      name: typeof record.name === 'string' ? record.name : '',
+      content: record.content,
+    })
+  }
+  return [...merged.values()]
+}
+
 /**
  * 应用导入的设置并刷新页面。
  * providers store 在模块加载时初始化，直接改内存无法让全部组件重新订阅，
  * 因此写入 localStorage 后统一 reload；设置项也一并落盘。
+ * 合并模式只同步服务商与提示词，界面偏好保留本机。
  */
-export const applySettingsBackup = (backup: SettingsBackup) => {
-  localStorage.setItem(PROVIDERS_KEY, JSON.stringify(backup.providers))
-  localStorage.setItem(ACTIVE_KEY, JSON.stringify(backup.activeModel))
+export const applySettingsBackup = (
+  backup: SettingsBackup,
+  mode: SettingsImportMode = 'replace'
+) => {
+  const current = useProviders.getState()
+  const providers =
+    mode === 'merge' ? mergeProviders(current.providers, backup.providers) : backup.providers
+  const activeModel =
+    mode === 'merge' ? (current.activeKey ?? backup.activeModel) : backup.activeModel
+  localStorage.setItem(PROVIDERS_KEY, JSON.stringify(providers))
+  localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeModel))
+
+  if (mode === 'merge') {
+    replaceCustomPrompts(mergePrompts(backup.customPrompts))
+    window.location.reload()
+    return
+  }
 
   const settings = backup.settings
   if (settings.locale === 'zh-CN' || settings.locale === 'en-US') {

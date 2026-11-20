@@ -200,12 +200,14 @@ export const zh = {
   settingsBackupExportFailed: "导出设置失败：{message}",
   settingsBackupImportLabel: "导入设置",
   settingsBackupImportDescription:
-    "从导出的 JSON 恢复服务商与设置，会覆盖当前配置；导入后页面刷新。",
+    "从导出的 JSON 恢复服务商与设置，可选择合并或覆盖；导入后页面刷新。",
   settingsBackupImportAction: "导入",
+  settingsBackupImportMerge: "合并导入",
+  settingsBackupImportReplace: "覆盖导入",
   settingsBackupImportInvalid: "文件无法识别，请选择本应用导出的设置文件",
   settingsBackupImportConfirmTitle: "导入设置？",
   settingsBackupImportConfirmDescription:
-    "将覆盖当前服务商、模型与偏好设置，导入后页面会自动刷新。",
+    "合并：新增服务商与提示词，同 id 用导入值更新，保留本机独有的项和界面偏好。覆盖：全部替换为文件中的服务商与设置。",
   deleteAllSessions: "删除所有对话",
   deleteAllSessionsModalTitle: "删除后，所有对话都将被清空且无法找回",
   deleteAllSessionsModalDescription: "本地保存的附件及未发送的草稿也将被删除。",
