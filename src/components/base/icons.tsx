@@ -222,6 +222,19 @@ export const IconPaperclipOutline16 = () => (
   </svg>
 )
 
+export const IconSparkles16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M6.2 1.8C6.2 4.23 5.23 5.2 2.8 5.2C5.23 5.2 6.2 6.17 6.2 8.6C6.2 6.17 7.17 5.2 9.6 5.2C7.17 5.2 6.2 4.23 6.2 1.8Z"
+      fill="currentColor"
+    />
+    <path
+      d="M11.6 8.4C11.6 10.04 10.94 10.7 9.3 10.7C10.94 10.7 11.6 11.36 11.6 13C11.6 11.36 12.26 10.7 13.9 10.7C12.26 10.7 11.6 10.04 11.6 8.4Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconRefreshOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

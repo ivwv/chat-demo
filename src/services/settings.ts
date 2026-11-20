@@ -20,6 +20,8 @@ type Settings = {
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
+  /** AI 会话命名使用的模型（`providerId::modelId`）；空串表示跟随当前模型 */
+  titleModelKey: string
 }
 
 const KEYS = {
@@ -32,6 +34,7 @@ const KEYS = {
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
+  titleModelKey: 'chat-demo:title-model',
 } as const
 
 const read = (key: string) => {
@@ -101,6 +104,7 @@ export const useSettings = create<Settings>(() => ({
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
+  titleModelKey: read(KEYS.titleModelKey) ?? '',
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -148,4 +152,9 @@ export const setSearch = (search: boolean) => {
 export const setSiderCollapsed = (siderCollapsed: boolean) => {
   write(KEYS.siderCollapsed, String(siderCollapsed))
   useSettings.setState({ siderCollapsed })
+}
+
+export const setTitleModelKey = (titleModelKey: string) => {
+  write(KEYS.titleModelKey, titleModelKey || null)
+  useSettings.setState({ titleModelKey })
 }

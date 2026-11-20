@@ -19,12 +19,14 @@ import {
 } from '../../services/chat/backup.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
+import { useProviders } from '../../services/providers/store.js'
 import {
   isChineseBrowser,
   setLocale,
   setLocation,
   setSystemPrompt,
   setThemePreference,
+  setTitleModelKey,
   setTtsVoice,
   useSettings,
   type ThemePreference,
@@ -112,6 +114,7 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
+              <AiTitleSetting />
               <SystemPromptSetting />
             </>
           ) : section === 'prompts' ? (
@@ -300,6 +303,35 @@ const LocaleSetting = () => {
             { value: 'en-US', label: t('settingsLocaleEnUS'), lang: 'en' },
           ]}
           onChange={setLocale}
+        />
+      }
+    />
+  )
+}
+
+/** AI 会话命名：选一个模型专用于生成标题；跟随当前模型时用底部选中的模型 */
+const AiTitleSetting = () => {
+  const t = useTranslate()
+  const providers = useProviders((state) => state.providers)
+  const titleModelKey = useSettings((state) => state.titleModelKey)
+  return (
+    <SettingCell
+      label={t('settingsAiTitleModel')}
+      status={null}
+      action={
+        <Select
+          ariaLabel={t('settingsAiTitleModel')}
+          value={titleModelKey}
+          options={[
+            { value: '', label: t('settingsAiTitleModelFollow') },
+            ...providers.flatMap((provider) =>
+              provider.models.map((model) => ({
+                value: `${provider.id}::${model.id}`,
+                label: `${provider.name} · ${model.label}`,
+              }))
+            ),
+          ]}
+          onChange={setTitleModelKey}
         />
       }
     />

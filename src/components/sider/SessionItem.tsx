@@ -1,11 +1,22 @@
 import clsx from 'clsx'
 import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconEditOutline16, IconEllipsisOutline16, IconTrashOutline16 } from '../base/icons.js'
-import { renameSession, selectSession } from '../../services/chat/store.js'
+import {
+  IconEditOutline16,
+  IconEllipsisOutline16,
+  IconSparkles16,
+  IconTrashOutline16,
+} from '../base/icons.js'
+import {
+  generateTitleWithAi,
+  renameSession,
+  selectSession,
+  useChatStore,
+} from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
+import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from './mobileSiderState.js'
 import styles from './SessionItem.module.css'
 
@@ -20,6 +31,7 @@ export const SessionItem = memo(function SessionItem({
 }) {
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
+  const naming = useChatStore((state) => state.naming[session.id] === true)
   const displayTitle = session.title || t('untitledChat')
 
   if (editing) {
@@ -59,6 +71,21 @@ export const SessionItem = memo(function SessionItem({
       <div className={styles.action} onClick={(event) => event.stopPropagation()}>
         <Menu
           options={[
+            {
+              key: 'ai-rename',
+              label: t(naming ? 'sessionItemMenuAiRenameBusy' : 'sessionItemMenuAiRenameOption'),
+              icon: <IconSparkles16 />,
+              onSelect: () => {
+                if (naming) {
+                  return
+                }
+                void generateTitleWithAi(session.id).then((ok) => {
+                  if (!ok) {
+                    showToast({ key: 'aiRenameFailed', type: 'error' })
+                  }
+                })
+              },
+            },
             {
               key: 'rename',
               label: t('sessionItemMenuRenameOption'),

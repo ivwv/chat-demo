@@ -86,6 +86,8 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
+  /** 正在用 AI 生成标题的会话 */
+  naming: Record<string, true>
 }
 
 export const useChatStore = create<ChatState>(() => ({
@@ -98,6 +100,7 @@ export const useChatStore = create<ChatState>(() => ({
   sessionSaveErrors: {},
   activeId: null,
   streaming: {},
+  naming: {},
 }))
 
 const { getState: get, setState: set } = useChatStore
@@ -497,6 +500,131 @@ export const renameSession = (id: string, title: string) => {
       ),
     }))
     void db.renameSession(id, title).catch(db.reportStorageError('rename session'))
+  }
+}
+
+/** 标题只看对话开头和最近几轮：首条提问定主题，其余按字符预算收口，避免长上下文白花 token */
+const TITLE_DIGEST_CHARS = 4000
+const TITLE_MESSAGE_CHARS = 500
+/** 模型偶尔会带引号或解释，标题本身限制在 60 字内（只影响标题，不涉及消息内容） */
+const TITLE_MAX_CHARS = 60
+
+const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max)}…`)
+
+const messageText = (message: Message) => {
+  if (message.role === 'user') {
+    return message.content.trim()
+  }
+  return message.blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim()
+}
+
+/** 截取对话摘要：保留首条与最近的若干条，中间不再发送 */
+const buildTitleDigest = (messages: Message[]): string => {
+  const lines = messages.flatMap((message) => {
+    const text = messageText(message)
+    if (!text) {
+      return []
+    }
+    const speaker = message.role === 'user' ? '用户' : '助手'
+    return [`${speaker}：${clip(text.replace(/\s+/g, ' '), TITLE_MESSAGE_CHARS)}`]
+  })
+  if (lines.length === 0) {
+    return ''
+  }
+  const [first, ...rest] = lines
+  const picked: string[] = []
+  let used = first.length
+  for (let index = rest.length - 1; index >= 0; index -= 1) {
+    if (used + rest[index].length > TITLE_DIGEST_CHARS) {
+      break
+    }
+    picked.unshift(rest[index])
+    used += rest[index].length
+  }
+  return [first, ...picked].join('\n\n')
+}
+
+const cleanTitle = (raw: string) => {
+  const text = raw
+    .replace(/^\s*(标题|title)\s*[:：]\s*/i, '')
+    .replace(/^["'“”‘’《》\s]+|["'“”‘’《》\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.length > TITLE_MAX_CHARS ? `${text.slice(0, TITLE_MAX_CHARS)}…` : text
+}
+
+/** 设置里指定了命名模型就用它；没配、或该模型已被删除时跟随当前选择 */
+const resolveTitleSelection = () => {
+  const { titleModelKey } = useSettings.getState()
+  const at = titleModelKey.indexOf('::')
+  if (at !== -1) {
+    const selection = resolveSelection(titleModelKey.slice(0, at), titleModelKey.slice(at + 2))
+    if (selection) {
+      return selection
+    }
+  }
+  return getActiveSelection()
+}
+
+/**
+ * 用所选模型给会话生成标题：只发截取后的对话摘要，收齐流式文本后取标题。
+ * 返回是否成功，失败提示由调用方决定。
+ */
+export const generateTitleWithAi = async (sessionId: string): Promise<boolean> => {
+  if (get().naming[sessionId] || get().importingHistory || deletingSessions.has(sessionId)) {
+    return false
+  }
+  const controller = new AbortController()
+  set((state) => ({ naming: { ...state.naming, [sessionId]: true } }))
+  try {
+    // 侧边栏可能对未打开的会话发起命名，先按需加载详情
+    await ensureSessionLoaded(sessionId)
+    const session = getSession(sessionId)
+    const selection = resolveTitleSelection()
+    if (!session || !selection) {
+      return false
+    }
+    const digest = buildTitleDigest(getVisibleMessages(session))
+    if (!digest) {
+      return false
+    }
+    const events = streamChat(
+      selection.provider,
+      selection.model.id,
+      {
+        system: translate('aiTitleSystemPrompt'),
+        messages: [{ role: 'user', content: digest }],
+        thinking: false,
+        search: false,
+        maxTokens: 64,
+      },
+      controller.signal
+    )
+    let raw = ''
+    for await (const event of events) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        raw += event.delta.text
+      }
+    }
+    const title = cleanTitle(raw)
+    if (!title) {
+      return false
+    }
+    updateSession(sessionId, (current) => ({ ...current, title }))
+    persist(sessionId)
+    return true
+  } catch {
+    return false
+  } finally {
+    set((state) => ({
+      naming: Object.fromEntries(
+        Object.entries(state.naming).filter(([id]) => id !== sessionId)
+      ),
+    }))
   }
 }
 
