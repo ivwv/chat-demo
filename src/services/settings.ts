@@ -22,6 +22,8 @@ type Settings = {
   siderCollapsed: boolean
   /** AI 会话命名使用的模型（`providerId::modelId`）；空串表示跟随当前模型 */
   titleModelKey: string
+  /** 强制允许图片输入：模型名未被识别为视觉模型时也照常发送，由服务端判断 */
+  forceVision: boolean
 }
 
 const KEYS = {
@@ -35,6 +37,7 @@ const KEYS = {
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
   titleModelKey: 'chat-demo:title-model',
+  forceVision: 'chat-demo:force-vision',
 } as const
 
 const read = (key: string) => {
@@ -105,6 +108,7 @@ export const useSettings = create<Settings>(() => ({
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   titleModelKey: read(KEYS.titleModelKey) ?? '',
+  forceVision: read(KEYS.forceVision) === 'true',
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -157,4 +161,9 @@ export const setSiderCollapsed = (siderCollapsed: boolean) => {
 export const setTitleModelKey = (titleModelKey: string) => {
   write(KEYS.titleModelKey, titleModelKey || null)
   useSettings.setState({ titleModelKey })
+}
+
+export const setForceVision = (forceVision: boolean) => {
+  write(KEYS.forceVision, String(forceVision))
+  useSettings.setState({ forceVision })
 }

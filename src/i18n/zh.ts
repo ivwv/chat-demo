@@ -102,6 +102,11 @@ export const zh = {
   settingsSystemPromptPlaceholder: "例如：你是一位严谨的技术文档编辑",
   systemPromptDefault: "该助手由 {name} 提供。",
   settingsTtsVoice: "朗读音色",
+  settingsVisionMode: "图片输入",
+  settingsVisionModeAuto: "按模型能力",
+  settingsVisionModeAlways: "始终允许",
+  settingsVisionModeDescription:
+    "模型名识别不出视觉能力时，可强制允许发送图片，由服务端判断是否支持",
   settingsAiTitleModel: "AI 会话命名",
   settingsAiTitleModelFollow: "跟随当前模型",
   settingsTtsVoiceStella: "海星（女声）",

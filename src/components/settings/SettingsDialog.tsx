@@ -27,6 +27,7 @@ import {
 } from '../../services/settingsBackup.js'
 import {
   isChineseBrowser,
+  setForceVision,
   setLocale,
   setLocation,
   setSystemPrompt,
@@ -120,6 +121,7 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
+              <VisionSetting />
               <AiTitleSetting />
               <SystemPromptSetting />
             </>
@@ -310,6 +312,30 @@ const LocaleSetting = () => {
             { value: 'en-US', label: t('settingsLocaleEnUS'), lang: 'en' },
           ]}
           onChange={setLocale}
+        />
+      }
+    />
+  )
+}
+
+/** 图片输入：默认按模型能力，识别不出时可强制放行，交给服务端判断 */
+const VisionSetting = () => {
+  const t = useTranslate()
+  const forceVision = useSettings((state) => state.forceVision)
+  return (
+    <SettingCell
+      label={t('settingsVisionMode')}
+      description={t('settingsVisionModeDescription')}
+      status={null}
+      action={
+        <Select
+          ariaLabel={t('settingsVisionMode')}
+          value={forceVision ? 'always' : 'auto'}
+          options={[
+            { value: 'auto', label: t('settingsVisionModeAuto') },
+            { value: 'always', label: t('settingsVisionModeAlways') },
+          ]}
+          onChange={(value) => setForceVision(value === 'always')}
         />
       }
     />

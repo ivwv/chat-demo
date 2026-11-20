@@ -2,6 +2,7 @@ import { useProviders } from './providers/store.js'
 import type { ProviderConfig } from './providers/types.js'
 import { readCustomPrompts, replaceCustomPrompts, type CustomPrompt } from './prompts.js'
 import {
+  setForceVision,
   setLocale,
   setLocation,
   setPromptId,
@@ -58,6 +59,7 @@ export const exportSettingsBackup = (): { name: string; blob: Blob } => {
       search: settings.search,
       siderCollapsed: settings.siderCollapsed,
       titleModelKey: settings.titleModelKey,
+      forceVision: settings.forceVision,
     },
     customPrompts: readCustomPrompts(),
   }
@@ -226,6 +228,9 @@ export const applySettingsBackup = (
   }
   if (typeof settings.titleModelKey === 'string') {
     setTitleModelKey(settings.titleModelKey)
+  }
+  if (typeof settings.forceVision === 'boolean') {
+    setForceVision(settings.forceVision)
   }
   replaceCustomPrompts(backup.customPrompts)
 

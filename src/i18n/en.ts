@@ -111,6 +111,11 @@ export const en = {
   settingsSystemPromptPlaceholder: 'e.g. You are a meticulous technical editor',
   systemPromptDefault: 'This assistant is provided by {name}.',
   settingsTtsVoice: 'Read-aloud voice',
+  settingsVisionMode: 'Image input',
+  settingsVisionModeAuto: 'Follow model capabilities',
+  settingsVisionModeAlways: 'Always allow',
+  settingsVisionModeDescription:
+    'Force-enable images when the model name is not recognized; the provider decides whether it works.',
   settingsAiTitleModel: 'AI chat naming',
   settingsAiTitleModelFollow: 'Follow current model',
   settingsTtsVoiceStella: 'Stella (female)',

@@ -1059,6 +1059,8 @@ const resolveInlineAttachments = async (
   signal: AbortSignal
 ): Promise<RequestAttachments> => {
   const capabilities = getModelCapabilities(provider, model)
+  // 模型名识别不出视觉能力时，设置里允许强制放行，避免逐个模型配置
+  const imageAllowed = capabilities.vision || useSettings.getState().forceVision
   const current = new Set(request.question.files.map((file) => file.id))
   if (capabilities.files === 'none') {
     if (current.size > 0) {
@@ -1077,7 +1079,7 @@ const resolveInlineAttachments = async (
   for (const file of files.values()) {
     signal.throwIfAborted()
     const kind = getAttachmentKind(file.name, file.mimeType)
-    if (kind === 'document' || (kind === 'image' && !capabilities.vision)) {
+    if (kind === 'document' || (kind === 'image' && !imageAllowed)) {
       if (current.has(file.id)) {
         throw new ApiError('protocol', {
           key: kind === 'document' ? 'replyAttachmentUnsupported' : 'replyImageUnsupported',
