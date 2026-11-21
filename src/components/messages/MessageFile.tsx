@@ -4,6 +4,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { getAttachmentKind, useUploads } from '../../services/attachments.js'
 import { loadFile } from '../../services/chat/db.js'
 import type { FileAttachment } from '../../services/chat/types.js'
+import { requestSyncedFile, useSyncStore } from '../../services/sync/engine.js'
 import { formatTokens } from '../../utils/tokens.js'
 import { IconPhotoErrorFill20, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
@@ -12,8 +13,8 @@ import { TextPreview } from '../files/TextPreview.js'
 import { useTextFile } from '../files/useTextFile.js'
 import styles from './MessageFile.module.css'
 
-/** 原件从 IndexedDB 读出；undefined 表示加载中，null 表示原件缺失。 */
-const useFileBlob = (id: string) => {
+/** 原件从 IndexedDB 读出；undefined 表示加载中，null 表示原件缺失；version 变化时重读同步落盘的原件。 */
+const useFileBlob = (id: string, version: number) => {
   const [state, setState] = useState<{ id: string; blob: Blob | null } | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -31,7 +32,7 @@ const useFileBlob = (id: string) => {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, version])
   return state?.id === id ? state.blob : undefined
 }
 
@@ -74,7 +75,12 @@ export const MessageFile = ({
   onRetry: (() => void) | null
 }) => {
   const t = useTranslate()
-  const blob = useFileBlob(file.id)
+  const syncVersion = useSyncStore((state) => state.fileVersions[file.id] ?? 0)
+  const syncPercent = useSyncStore((state) => state.downloadingFiles[file.id])
+  const canPullFromPeer = useSyncStore(
+    (state) => state.status === 'connected' && state.peers.length > 0
+  )
+  const blob = useFileBlob(file.id, syncVersion)
   const url = useObjectUrl(blob ?? null)
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -82,11 +88,12 @@ export const MessageFile = ({
   const upload = useUploadState(file)
   // 只有文本类附件才读内容：PDF 等二进制按文本解码会得到垃圾，也不该给 token 估算
   const isText = getAttachmentKind(file.name, file.mimeType) === 'text'
-  const textFile = useTextFile(file.id, isText)
+  const textFile = useTextFile(file.id, isText, syncVersion)
   const uploading = upload?.status === 'uploading'
   const failed = upload?.status === 'error'
   const retryable = failed && upload.retryable
   const errorText = failed ? t(upload.error.key, upload.error.params) : undefined
+  const pullingFromPeer = syncPercent !== undefined
 
   const retry = retryable ? onRetry : null
 
@@ -176,26 +183,34 @@ export const MessageFile = ({
   }
 
   const canPreview = textFile.text !== null
+  const missingLocalBlob = blob === null && !uploading && !failed
+  const extraLabel = pullingFromPeer
+    ? t('syncFilePulling', { percent: syncPercent })
+    : textFile.tokens === null
+      ? undefined
+      : t('fileTokenCount', { count: formatTokens(textFile.tokens) })
+  const cardHint = canPreview
+    ? {
+        label: expanded ? t('fileCollapseText') : t('fileExpandText'),
+        onClick: () => setExpanded((value) => !value),
+      }
+    : missingLocalBlob && canPullFromPeer && !pullingFromPeer
+      ? {
+          label: t('syncFilePullAction'),
+          onClick: () => {
+            requestSyncedFile(file.id, file.name)
+          },
+        }
+      : undefined
   return (
     <div className={styles.textFile}>
       <FileCard
         name={file.name}
         size={file.size}
-        status={uploading ? 'uploading' : failed ? 'error' : 'done'}
+        status={uploading || pullingFromPeer ? 'uploading' : failed ? 'error' : 'done'}
         error={errorText}
-        extra={
-          textFile.tokens === null
-            ? undefined
-            : t('fileTokenCount', { count: formatTokens(textFile.tokens) })
-        }
-        hint={
-          canPreview
-            ? {
-                label: expanded ? t('fileCollapseText') : t('fileExpandText'),
-                onClick: () => setExpanded((value) => !value),
-              }
-            : undefined
-        }
+        extra={extraLabel}
+        hint={cardHint}
         onRetry={retry ?? undefined}
         onOpen={canPreview ? () => setPreviewing(true) : undefined}
       />

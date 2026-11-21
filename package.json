@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "rspack serve -c rspack.config.ts",
     "build": "rm -rf dist && NODE_ENV=production rspack build -c rspack.config.ts",
+    "build:win": "rimraf dist && cross-env NODE_ENV=production rspack build -c rspack.config.ts",
     "type": "tsc -p tsconfig.json",
     "lint": "oxlint src rspack.config.ts",
     "format": "oxfmt --write ."
@@ -40,8 +41,10 @@
     "@rspack/dev-server": "2.0.1",
     "@swc/helpers": "0.5.23",
     "@types/node": "~20.9.2",
+    "cross-env": "^10.1.0",
     "oxfmt": "0.48.0",
     "oxlint": "1.63.0",
+    "rimraf": "^6.1.4",
     "typescript": "7.0.2"
   }
 }

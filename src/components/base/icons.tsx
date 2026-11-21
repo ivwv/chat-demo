@@ -597,3 +597,23 @@ export const IconTaskChecked14 = () => (
     />
   </svg>
 )
+
+/** 多端同步：双向循环箭头 */
+export const IconSyncOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M13.5 6.5A5.8 5.8 0 0 0 3.2 4.6M2.5 2.4v2.6h2.6"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M2.5 9.5a5.8 5.8 0 0 0 10.3 1.9M13.5 13.6V11h-2.6"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)

@@ -1,25 +1,25 @@
-import { create } from 'zustand'
-import { hasUsableProvider } from '../../services/providers/store.js'
+import { create } from "zustand";
+import { hasUsableProvider } from "../../services/providers/store.js";
 
-/** 设置弹窗的分组：通用设置 / 提示词 / 服务商 / 数据管理 */
-export type SettingsSection = 'general' | 'prompts' | 'providers' | 'data'
+/** 设置弹窗的分组：通用设置 / 提示词 / 服务商 / 多端同步 / 数据管理 */
+export type SettingsSection = "general" | "prompts" | "providers" | "sync" | "data";
 
 /** 设置弹窗：侧边栏底部、没有 API Key 时的操作与 401 提示都可以打开；section 为打开时选中的分组 */
 export const useSettingsDialog = create(() => ({
   open: false,
-  section: 'general' as SettingsSection,
-}))
+  section: "general" as SettingsSection,
+}));
 
 export const openSettings = (section: SettingsSection) =>
-  useSettingsDialog.setState({ open: true, section })
+  useSettingsDialog.setState({ open: true, section });
 
-export const closeSettings = () => useSettingsDialog.setState({ open: false })
+export const closeSettings = () => useSettingsDialog.setState({ open: false });
 
 /** 没有可用的服务商时打开设置里的服务商分组，返回当前选择是否已可发请求 */
 export const ensureProvider = () => {
   if (hasUsableProvider()) {
-    return true
+    return true;
   }
-  openSettings('providers')
-  return false
-}
+  openSettings("providers");
+  return false;
+};

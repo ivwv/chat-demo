@@ -168,6 +168,24 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.syncDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  margin-right: 8px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-label-caption);
+}
+
+.syncDotConnected {
+  background-color: var(--dsw-static-green-500);
+}
+
+.syncDotBusy {
+  background-color: var(--dsw-static-amber-500);
+}
+
 .collapsed {
   position: absolute;
   top: 0;

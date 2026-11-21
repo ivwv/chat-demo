@@ -6,6 +6,7 @@ import { setSiderCollapsed } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
 import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
+import { useSyncStore } from '../../services/sync/engine.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
@@ -20,6 +21,11 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
+  const syncStatus = useSyncStore((state) => state.status)
+  const syncPeersCount = useSyncStore((state) => state.peers.length)
+  const hasSyncConfigured = useSyncStore(
+    (state) => Boolean(state.config.workerUrl.trim()) || state.status !== 'disconnected'
+  )
   const [now, setNow] = useState(Date.now)
   const groups = useMemo(() => groupSessions(sessions, now, t), [sessions, now, t])
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
@@ -97,6 +103,25 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
             <IconSettingsOutline16 />
           </span>
           <span className={styles.settingsLabel}>{t('settings')}</span>
+          {hasSyncConfigured ? (
+            <span
+              className={clsx(
+                styles.syncDot,
+                syncStatus === 'connected' && styles.syncDotConnected,
+                (syncStatus === 'loading-sdk' ||
+                  syncStatus === 'connecting' ||
+                  syncStatus === 'reconnecting') &&
+                  styles.syncDotBusy
+              )}
+              title={
+                syncStatus === 'connected'
+                  ? t('syncStatusConnected', { count: syncPeersCount + 1 })
+                  : syncStatus === 'disconnected'
+                    ? t('syncStatusDisconnected')
+                    : t('syncStatusConnecting')
+              }
+            />
+          ) : null}
         </button>
       </div>
       {deleting ? (

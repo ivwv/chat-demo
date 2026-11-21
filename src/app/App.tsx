@@ -21,6 +21,7 @@ import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
+import { bootstrapSync, useSyncStore } from '../services/sync/engine.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
@@ -51,6 +52,8 @@ export const App = () => {
     state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
   )
   const activeId = useChatStore((state) => state.activeId)
+  const branchNotice = useSyncStore((state) => state.branchNotice)
+  const lastBranchNoticeIdRef = useRef(0)
 
   usePreventPageScroll(isMobile)
 
@@ -69,6 +72,15 @@ export const App = () => {
   useEffect(() => onUploadNotice(showToast), [])
   useEffect(bindChatPersistence, [])
 
+  // 当前正在查看的会话合入了来自其他设备的并发分支时轻提示，不打断当前阅读焦点
+  useEffect(() => {
+    if (!branchNotice || branchNotice.id === lastBranchNoticeIdRef.current) {
+      return
+    }
+    lastBranchNoticeIdRef.current = branchNotice.id
+    showToast({ key: 'syncBranchMergedToast', params: { device: branchNotice.fromName } })
+  }, [branchNotice])
+
   // 搜索结果面板只属于当前会话
   useEffect(closeSearchPanel, [activeId])
   // 切换会话时停止朗读
@@ -81,20 +93,20 @@ export const App = () => {
   useEffect(() => {
     // 地址里带着会话 id 时优先恢复，刷新后不用再手动切换
     void initChat().then(() => {
-      if (restoredRef.current) {
-        return
+      if (!restoredRef.current) {
+        restoredRef.current = true
+        const id = readSessionIdFromUrl()
+        if (id) {
+          if (useChatStore.getState().sessions.some((session) => session.id === id)) {
+            selectSession(id)
+          } else {
+            // id 对应不上任何会话：留在新会话，并清掉地址里的 id
+            writeSessionIdToUrl(null)
+          }
+        }
       }
-      restoredRef.current = true
-      const id = readSessionIdFromUrl()
-      if (!id) {
-        return
-      }
-      if (useChatStore.getState().sessions.some((session) => session.id === id)) {
-        selectSession(id)
-      } else {
-        // id 对应不上任何会话：留在新会话，并清掉地址里的 id
-        writeSessionIdToUrl(null)
-      }
+      // 会话列表就绪后再启动多端同步（若上次已连接则自动加载外部 SDK 并重连对账）
+      bootstrapSync()
     })
     // 首次打开先在设置里输入 API Key
     ensureProvider()

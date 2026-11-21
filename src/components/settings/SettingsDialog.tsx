@@ -9,6 +9,7 @@ import {
   IconPromptOutline16,
   IconServerOutline16,
   IconSettingsOutline16,
+  IconSyncOutline16,
   IconUploadOutline14,
 } from '../base/icons.js'
 import {
@@ -45,6 +46,7 @@ import { ModelPicker } from '../chatInput/ModelPicker.js'
 import { showToast } from '../base/toastState.js'
 import { PromptsSection } from './PromptsSection.js'
 import { ProvidersSection } from './ProvidersSection.js'
+import { SyncSection } from './SyncSection.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import styles from './Settings.module.css'
 
@@ -73,6 +75,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     value: 'providers',
     label: 'settingDialogAsideProvidersOptionLabel',
     icon: <IconServerOutline16 />,
+  },
+  {
+    value: 'sync',
+    label: 'settingDialogAsideSyncOptionLabel',
+    icon: <IconSyncOutline16 />,
   },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
@@ -129,6 +136,8 @@ const SettingsContent = () => {
             <PromptsSection />
           ) : section === 'providers' ? (
             <ProvidersSection />
+          ) : section === 'sync' ? (
+            <SyncSection />
           ) : (
             <>
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
