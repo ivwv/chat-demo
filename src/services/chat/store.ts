@@ -1,9 +1,9 @@
-import { create } from 'zustand'
-import { createId } from '../../utils/id.js'
-import { translate } from '../../i18n/index.js'
-import { ApiError } from '../api/client.js'
-import { streamChat } from '../api/dispatch.js'
-import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
+import { create } from "zustand";
+import { createId } from "../../utils/id.js";
+import { translate } from "../../i18n/index.js";
+import { ApiError } from "../api/client.js";
+import { streamChat } from "../api/dispatch.js";
+import { extractFileIds, getFileErrorCode, isRetryableApiError } from "../api/errors.js";
 import {
   cancelUpload,
   describeUploadError,
@@ -11,21 +11,21 @@ import {
   toInlineAttachment,
   uploadAttachment,
   useUploads,
-} from '../attachments.js'
-import { getActiveSelection, resolveSelection } from '../providers/store.js'
-import { getModelCapabilities, type ModelConfig, type ProviderConfig } from '../providers/types.js'
-import { getPromptContent } from '../prompts.js'
-import { useSettings } from '../settings.js'
-import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
-import * as db from './db.js'
+} from "../attachments.js";
+import { getActiveSelection, resolveSelection } from "../providers/store.js";
+import { getModelCapabilities, type ModelConfig, type ProviderConfig } from "../providers/types.js";
+import { getPromptContent } from "../prompts.js";
+import { useSettings } from "../settings.js";
+import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from "./branches.js";
+import * as db from "./db.js";
 import {
   clearAllDrafts,
   clearDraft,
   clearSentDraft,
   getDraft,
   prepareDraftMessage,
-} from './drafts.js'
-import { createLatestReminder } from './latestReminder.js'
+} from "./drafts.js";
+import { createLatestReminder } from "./latestReminder.js";
 import {
   applyEvent,
   canContinueReply,
@@ -33,7 +33,7 @@ import {
   settleReply,
   toRequestMessages,
   type RequestAttachments,
-} from './reply.js'
+} from "./reply.js";
 import {
   toSessionSummary,
   type AssistantMessage,
@@ -42,53 +42,53 @@ import {
   type Session,
   type SessionSummary,
   type UserMessage,
-} from './types.js'
+} from "./types.js";
 
 /**
  * 所有生成请求统一携带的助手身份说明，优先级：
  * 选中的提示词预设 → 设置里的自定义说明 → 按当前服务商生成。
  */
 const buildSystemPrompt = (provider: ProviderConfig) => {
-  const { promptId, systemPrompt } = useSettings.getState()
+  const { promptId, systemPrompt } = useSettings.getState();
   return (
     getPromptContent(promptId) ||
     systemPrompt.trim() ||
-    translate('systemPromptDefault', { name: provider.name })
-  )
-}
+    translate("systemPromptDefault", { name: provider.name })
+  );
+};
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
-const SESSION_CACHE_LIMIT = 5
+const SESSION_CACHE_LIMIT = 5;
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
-const FILE_RETRY_LIMIT = 2
+const FILE_RETRY_LIMIT = 2;
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
-const FILE_RETRY_BASE_DELAY = 1000
+const FILE_RETRY_BASE_DELAY = 1000;
 
 /**
  * 服务端不生成标题时用首条提问兜底，避免会话列表一直显示「新对话」。
  * 只做空白折叠，不截断文字——侧边栏放不下时由界面省略号呈现。
  */
-const createLocalTitle = (text: string) => text.replace(/\s+/g, ' ').trim()
+const createLocalTitle = (text: string) => text.replace(/\s+/g, " ").trim();
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
-const titleRequests = new Set<AbortController>()
+const titleRequests = new Set<AbortController>();
 
 type ChatState = {
-  ready: boolean
-  initError: boolean
+  ready: boolean;
+  initError: boolean;
   /** 历史导入或全部删除期间锁定交互，提交成功前仍展示原有记录。 */
-  importingHistory: boolean
+  importingHistory: boolean;
   /** 仅列表元数据，按 updatedAt 降序；流式消息更新不会改变此数组。 */
-  sessions: SessionSummary[]
-  sessionCache: Record<string, Session>
-  sessionLoadErrors: Record<string, boolean>
-  sessionSaveErrors: Record<string, boolean>
+  sessions: SessionSummary[];
+  sessionCache: Record<string, Session>;
+  sessionLoadErrors: Record<string, boolean>;
+  sessionSaveErrors: Record<string, boolean>;
   /** null 表示新对话（欢迎页） */
-  activeId: string | null
+  activeId: string | null;
   /** 正在生成回复的会话 */
-  streaming: Record<string, AbortController>
+  streaming: Record<string, AbortController>;
   /** 正在用 AI 生成标题的会话 */
-  naming: Record<string, true>
-}
+  naming: Record<string, true>;
+};
 
 export const useChatStore = create<ChatState>(() => ({
   ready: false,
@@ -101,47 +101,70 @@ export const useChatStore = create<ChatState>(() => ({
   activeId: null,
   streaming: {},
   naming: {},
-}))
+}));
 
-const { getState: get, setState: set } = useChatStore
+const { getState: get, setState: set } = useChatStore;
 
 const sortSessions = (sessions: SessionSummary[]) =>
-  [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
+  [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 
 const getSession = (id: string) => {
-  const cache = get().sessionCache
-  return Object.hasOwn(cache, id) ? cache[id] : undefined
-}
+  const cache = get().sessionCache;
+  return Object.hasOwn(cache, id) ? cache[id] : undefined;
+};
 
 const getStreamController = (id: string) => {
-  const streams = get().streaming
-  return Object.hasOwn(streams, id) ? streams[id] : undefined
-}
+  const streams = get().streaming;
+  return Object.hasOwn(streams, id) ? streams[id] : undefined;
+};
 
 const sameSummary = (a: SessionSummary, b: SessionSummary) =>
-  a.title === b.title && a.createdAt === b.createdAt && a.updatedAt === b.updatedAt
+  a.title === b.title && a.createdAt === b.createdAt && a.updatedAt === b.updatedAt;
 
-const sessionAccess = new Map<string, number>()
-const unsavedSessions = new Set<string>()
+const sessionAccess = new Map<string, number>();
+const unsavedSessions = new Set<string>();
 /** 保存失败时保留原件，重试成功后才释放。 */
-const pendingFiles = new Map<string, db.StoredFile[]>()
+const pendingFiles = new Map<string, db.StoredFile[]>();
 /** 刚发送、尚未写入 IndexedDB 的原件：请求可能早于落盘完成就开始读取 */
-const recentBlobs = new Map<string, Blob>()
-const deletingSessions = new Set<string>()
-const deletionTasks = new Set<Promise<boolean>>()
-const streamFlushes = new Map<string, () => void>()
-let accessSequence = 0
-let historyEpoch = 0
-let initTask: Promise<void> | undefined
-const sessionLoads = new Map<string, { promise: Promise<void> }>()
+const recentBlobs = new Map<string, Blob>();
+/** 本地用户操作引发的持久化变更事件，供同步引擎单向订阅（远端合入不触发） */
+export type LocalChatMutation =
+  | { type: "session-saved"; sessionId: string }
+  | { type: "session-renamed"; sessionId: string; title: string; updatedAt: number }
+  | { type: "session-deleted"; sessionId: string; deletedAt: number };
 
-const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence)
+type LocalChatMutationListener = (event: LocalChatMutation) => void;
+
+const localMutationListeners = new Set<LocalChatMutationListener>();
+
+export const onLocalChatMutation = (listener: LocalChatMutationListener): (() => void) => {
+  localMutationListeners.add(listener);
+  return () => {
+    localMutationListeners.delete(listener);
+  };
+};
+
+const emitLocalMutation = (event: LocalChatMutation) => {
+  for (const listener of localMutationListeners) {
+    listener(event);
+  }
+};
+
+const deletingSessions = new Set<string>();
+const deletionTasks = new Set<Promise<boolean>>();
+const streamFlushes = new Map<string, () => void>();
+let accessSequence = 0;
+let historyEpoch = 0;
+let initTask: Promise<void> | undefined;
+const sessionLoads = new Map<string, { promise: Promise<void> }>();
+
+const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence);
 
 const trimSessionCache = () => {
-  const state = get()
-  const ids = Object.keys(state.sessionCache)
+  const state = get();
+  const ids = Object.keys(state.sessionCache);
   if (ids.length <= SESSION_CACHE_LIMIT) {
-    return
+    return;
   }
   const removable = ids
     .filter(
@@ -149,31 +172,31 @@ const trimSessionCache = () => {
         id !== state.activeId &&
         !Object.hasOwn(state.streaming, id) &&
         !unsavedSessions.has(id) &&
-        !deletingSessions.has(id)
+        !deletingSessions.has(id),
     )
-    .sort((a, b) => (sessionAccess.get(a) ?? 0) - (sessionAccess.get(b) ?? 0))
-  const evicted = new Set(removable.slice(0, ids.length - SESSION_CACHE_LIMIT))
+    .sort((a, b) => (sessionAccess.get(a) ?? 0) - (sessionAccess.get(b) ?? 0));
+  const evicted = new Set(removable.slice(0, ids.length - SESSION_CACHE_LIMIT));
   for (const id of evicted) {
-    sessionAccess.delete(id)
+    sessionAccess.delete(id);
   }
   if (evicted.size > 0) {
     set({
       sessionCache: Object.fromEntries(
-        Object.entries(state.sessionCache).filter(([id]) => !evicted.has(id))
+        Object.entries(state.sessionCache).filter(([id]) => !evicted.has(id)),
       ),
-    })
+    });
   }
-}
+};
 
 const updateSession = (id: string, update: (session: Session) => Session) =>
   set((state) => {
-    const previous = Object.hasOwn(state.sessionCache, id) ? state.sessionCache[id] : undefined
+    const previous = Object.hasOwn(state.sessionCache, id) ? state.sessionCache[id] : undefined;
     if (!previous) {
-      return state
+      return state;
     }
-    const session = update(previous)
+    const session = update(previous);
     if (session === previous) {
-      return state
+      return state;
     }
     return {
       sessionCache: { ...state.sessionCache, [id]: session },
@@ -181,11 +204,11 @@ const updateSession = (id: string, update: (session: Session) => Session) =>
         ? state.sessions
         : sortSessions(
             state.sessions.map((summary) =>
-              summary.id === id ? toSessionSummary(session) : summary
-            )
+              summary.id === id ? toSessionSummary(session) : summary,
+            ),
           ),
-    }
-  })
+    };
+  });
 
 const updateReply = (sessionId: string, reply: AssistantMessage) =>
   updateSession(sessionId, (session) => ({
@@ -193,203 +216,203 @@ const updateReply = (sessionId: string, reply: AssistantMessage) =>
     messages: session.messages.map((message) =>
       message.id === reply.id
         ? { ...reply, parentId: message.parentId, selectedChildId: message.selectedChildId }
-        : message
+        : message,
     ),
-  }))
+  }));
 
 const persist = (sessionId: string) => {
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (session) {
-    unsavedSessions.add(sessionId)
+    unsavedSessions.add(sessionId);
     if (deletingSessions.has(sessionId)) {
-      return
+      return;
     }
-    const epoch = historyEpoch
-    const files = pendingFiles.get(sessionId)
+    const epoch = historyEpoch;
+    const files = pendingFiles.get(sessionId);
     void db
       .saveSession(session, files)
       .then(() => {
         if (epoch !== historyEpoch || !getSession(sessionId)) {
-          return
+          return;
         }
         if (pendingFiles.get(sessionId) === files) {
-          pendingFiles.delete(sessionId)
-          files?.forEach((file) => recentBlobs.delete(file.id))
+          pendingFiles.delete(sessionId);
+          files?.forEach((file) => recentBlobs.delete(file.id));
         }
         if (getSession(sessionId) === session) {
-          unsavedSessions.delete(sessionId)
+          unsavedSessions.delete(sessionId);
           set((state) => ({
             sessionSaveErrors: Object.fromEntries(
-              Object.entries(state.sessionSaveErrors).filter(([id]) => id !== sessionId)
+              Object.entries(state.sessionSaveErrors).filter(([id]) => id !== sessionId),
             ),
-          }))
-          trimSessionCache()
+          }));
+          trimSessionCache();
         }
       })
       .catch((error: unknown) => {
-        db.reportStorageError('save session')(error)
+        db.reportStorageError("save session")(error);
         if (epoch === historyEpoch && getSession(sessionId)) {
           set((state) => ({
             sessionSaveErrors: { ...state.sessionSaveErrors, [sessionId]: true },
-          }))
+          }));
         }
-      })
+      });
   }
-}
+};
 
 export const retrySaveSessions = () => {
   if (!get().importingHistory) {
-    unsavedSessions.forEach(persist)
+    unsavedSessions.forEach(persist);
   }
-}
+};
 
 /** 离开前先合并尚未绘制的增量；隐藏期间浏览器可能暂停动画帧。 */
 export const bindChatPersistence = () => {
   const save = () => {
     if (get().importingHistory) {
-      return
+      return;
     }
     for (const [id, flush] of streamFlushes) {
-      flush()
-      persist(id)
+      flush();
+      persist(id);
     }
     for (const id of unsavedSessions) {
       if (!streamFlushes.has(id)) {
-        persist(id)
+        persist(id);
       }
     }
-  }
+  };
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') {
-      save()
+    if (document.visibilityState === "hidden") {
+      save();
     }
-  }
-  document.addEventListener('visibilitychange', onVisibilityChange)
-  window.addEventListener('pagehide', save)
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", save);
   return () => {
-    document.removeEventListener('visibilitychange', onVisibilityChange)
-    window.removeEventListener('pagehide', save)
-  }
-}
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", save);
+  };
+};
 
 /**
  * 新建回复：一律按当前选择记录服务商与模型快照。
  * 重新生成也跟随当前选择，用户切换模型后立即生效，不会继续用旧模型请求。
  */
 const createReply = (): AssistantMessage => {
-  const { thinking, search } = useSettings.getState()
-  const selection = getActiveSelection()
-  const capabilities = selection ? getModelCapabilities(selection.provider, selection.model) : null
+  const { thinking, search } = useSettings.getState();
+  const selection = getActiveSelection();
+  const capabilities = selection ? getModelCapabilities(selection.provider, selection.model) : null;
   return {
     id: createId(),
-    role: 'assistant',
+    role: "assistant",
     createdAt: Date.now(),
     model: selection?.model.id ?? null,
     providerId: selection?.provider.id,
     thinking: thinking && capabilities?.thinking === true,
     search: search && capabilities?.search === true,
     prefix: true,
-    status: 'pending',
+    status: "pending",
     blocks: [],
-  }
-}
+  };
+};
 
 /** 仍在生成中的回复（页面关闭或导出时未结束）按「已停止」处理 */
 const settleInterrupted = (session: Session): Session => {
   if (
     !session.messages.some(
-      (m) => m.role === 'assistant' && (m.status === 'pending' || m.status === 'streaming')
+      (m) => m.role === "assistant" && (m.status === "pending" || m.status === "streaming"),
     )
   ) {
-    return session
+    return session;
   }
   return {
     ...session,
     messages: session.messages.map((m) =>
-      m.role === 'assistant' && (m.status === 'pending' || m.status === 'streaming')
-        ? settleReply(m, 'stopped', session.updatedAt)
-        : m
+      m.role === "assistant" && (m.status === "pending" || m.status === "streaming")
+        ? settleReply(m, "stopped", session.updatedAt)
+        : m,
     ),
-  }
-}
+  };
+};
 
 export const initChat = (): Promise<void> => {
   if (get().ready) {
-    return Promise.resolve()
+    return Promise.resolve();
   }
   if (initTask) {
-    return initTask
+    return initTask;
   }
-  const epoch = historyEpoch
-  set({ initError: false })
+  const epoch = historyEpoch;
+  set({ initError: false });
   initTask = (async () => {
     try {
-      const summaries = await db.loadSessionSummaries()
+      const summaries = await db.loadSessionSummaries();
       if (epoch === historyEpoch) {
-        set({ ready: true, sessions: sortSessions(summaries) })
+        set({ ready: true, sessions: sortSessions(summaries) });
       }
     } catch (error) {
       if (epoch === historyEpoch) {
-        set({ initError: true })
-        db.reportStorageError('read local sessions')(error)
+        set({ initError: true });
+        db.reportStorageError("read local sessions")(error);
       }
     } finally {
       if (epoch === historyEpoch) {
-        initTask = undefined
+        initTask = undefined;
       }
     }
-  })()
-  return initTask
-}
+  })();
+  return initTask;
+};
 
 /** 同一会话合并并发读取；切换只改变 activeId，旧请求不会把界面切回去。 */
 const ensureSessionLoaded = (id: string): Promise<void> => {
   if (getSession(id)) {
-    return Promise.resolve()
+    return Promise.resolve();
   }
-  const pending = sessionLoads.get(id)
+  const pending = sessionLoads.get(id);
   if (pending) {
-    return pending.promise
+    return pending.promise;
   }
-  const epoch = historyEpoch
-  set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: false } }))
-  const load = { promise: Promise.resolve() }
-  sessionLoads.set(id, load)
+  const epoch = historyEpoch;
+  set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: false } }));
+  const load = { promise: Promise.resolve() };
+  sessionLoads.set(id, load);
   load.promise = (async () => {
     try {
-      const stored = await db.loadSession(id)
+      const stored = await db.loadSession(id);
       if (epoch !== historyEpoch || sessionLoads.get(id) !== load) {
-        return
+        return;
       }
-      const summary = get().sessions.find((session) => session.id === id)
+      const summary = get().sessions.find((session) => session.id === id);
       if (!summary) {
-        return
+        return;
       }
       if (!stored) {
-        throw new Error(`Session ${id} is missing from local storage`)
+        throw new Error(`Session ${id} is missing from local storage`);
       }
-      const settled = settleInterrupted(normalizeSession(stored))
+      const settled = settleInterrupted(normalizeSession(stored));
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
-      const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
-      touchSession(id)
-      set((state) => ({ sessionCache: { ...state.sessionCache, [id]: session } }))
+      const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary };
+      touchSession(id);
+      set((state) => ({ sessionCache: { ...state.sessionCache, [id]: session } }));
       if (session !== stored) {
-        persist(id)
+        persist(id);
       }
-      trimSessionCache()
+      trimSessionCache();
     } catch (error) {
       if (epoch === historyEpoch && sessionLoads.get(id) === load) {
-        set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: true } }))
-        db.reportStorageError('read session')(error)
+        set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: true } }));
+        db.reportStorageError("read session")(error);
       }
     } finally {
       if (sessionLoads.get(id) === load) {
-        sessionLoads.delete(id)
+        sessionLoads.delete(id);
       }
     }
-  })()
-  return load.promise
-}
+  })();
+  return load.promise;
+};
 
 /** 等所有回复的收尾（落盘）完成 */
 const waitForIdle = (sessionId?: string) =>
@@ -397,18 +420,18 @@ const waitForIdle = (sessionId?: string) =>
     const isIdle = (state: ChatState) =>
       sessionId === undefined
         ? Object.keys(state.streaming).length === 0
-        : !Object.hasOwn(state.streaming, sessionId)
+        : !Object.hasOwn(state.streaming, sessionId);
     if (isIdle(get())) {
-      resolve()
-      return
+      resolve();
+      return;
     }
     const unsubscribe = useChatStore.subscribe((state) => {
       if (isIdle(state)) {
-        unsubscribe()
-        resolve()
+        unsubscribe();
+        resolve();
       }
-    })
-  })
+    });
+  });
 
 /**
  * 替换历史对话：先写入暂存，成功后原子替换旧记录；写入为空即删除全部会话与附件。
@@ -416,33 +439,33 @@ const waitForIdle = (sessionId?: string) =>
  */
 export const replaceHistory = async (write: () => Promise<void>): Promise<number> => {
   if (get().importingHistory) {
-    throw new Error('History replacement is already in progress')
+    throw new Error("History replacement is already in progress");
   }
-  set({ importingHistory: true })
+  set({ importingHistory: true });
   try {
     for (const controller of Object.values(get().streaming)) {
-      controller.abort()
+      controller.abort();
     }
     // 已开始的单条删除先同步到内存，避免本次替换失败后列表残留已被删除的记录。
-    await Promise.all(deletionTasks)
-    historyEpoch += 1
-    initTask = undefined
-    sessionLoads.clear()
-    await waitForIdle()
-    await db.clearStaging()
-    let summaries: SessionSummary[]
+    await Promise.all(deletionTasks);
+    historyEpoch += 1;
+    initTask = undefined;
+    sessionLoads.clear();
+    await waitForIdle();
+    await db.clearStaging();
+    let summaries: SessionSummary[];
     try {
-      await write()
-      summaries = await db.commitStaging()
+      await write();
+      summaries = await db.commitStaging();
     } catch (error) {
-      await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
-      throw error
+      await db.clearStaging().catch(db.reportStorageError("clear unfinished history replacement"));
+      throw error;
     }
-    sessionAccess.clear()
-    unsavedSessions.clear()
-    pendingFiles.clear()
-    recentBlobs.clear()
-    clearAllDrafts()
+    sessionAccess.clear();
+    unsavedSessions.clear();
+    pendingFiles.clear();
+    recentBlobs.clear();
+    clearAllDrafts();
     set({
       ready: true,
       initError: false,
@@ -451,126 +474,128 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
       sessionLoadErrors: {},
       sessionSaveErrors: {},
       activeId: null,
-    })
-    return summaries.length
+    });
+    return summaries.length;
   } finally {
-    set({ importingHistory: false })
-    retrySaveSessions()
-    const { activeId, ready } = get()
+    set({ importingHistory: false });
+    retrySaveSessions();
+    const { activeId, ready } = get();
     // 替换失败时恢复被取消的详情读取，原有记录继续可用。
     if (activeId !== null) {
-      void ensureSessionLoaded(activeId)
+      void ensureSessionLoaded(activeId);
     } else if (!ready) {
-      void initChat()
+      void initChat();
     }
   }
-}
+};
 
 export const newChat = () => {
   if (!get().importingHistory) {
-    set({ activeId: null })
-    trimSessionCache()
+    set({ activeId: null });
+    trimSessionCache();
   }
-}
+};
 
 export const selectSession = (id: string) => {
   if (!get().importingHistory && get().sessions.some((session) => session.id === id)) {
-    touchSession(id)
-    set({ activeId: id })
-    void ensureSessionLoaded(id)
-    trimSessionCache()
+    touchSession(id);
+    set({ activeId: id });
+    void ensureSessionLoaded(id);
+    trimSessionCache();
   }
-}
+};
 
 export const renameSession = (id: string, title: string) => {
   if (get().importingHistory || deletingSessions.has(id)) {
-    return
+    return;
   }
-  const controller = getStreamController(id)
+  const controller = getStreamController(id);
   if (controller) {
-    titleRequests.delete(controller)
+    titleRequests.delete(controller);
   }
+  const renamedAt = Date.now();
   if (getSession(id)) {
-    updateSession(id, (session) => ({ ...session, title }))
-    persist(id)
+    updateSession(id, (session) => ({ ...session, title }));
+    persist(id);
   } else {
     set((state) => ({
       sessions: state.sessions.map((session) =>
-        session.id === id ? { ...session, title } : session
+        session.id === id ? { ...session, title } : session,
       ),
-    }))
-    void db.renameSession(id, title).catch(db.reportStorageError('rename session'))
+    }));
+    void db.renameSession(id, title).catch(db.reportStorageError("rename session"));
   }
-}
+  emitLocalMutation({ type: "session-renamed", sessionId: id, title, updatedAt: renamedAt });
+};
 
 /** 标题只看对话开头和最近几轮：首条提问定主题，其余按字符预算收口，避免长上下文白花 token */
-const TITLE_DIGEST_CHARS = 4000
-const TITLE_MESSAGE_CHARS = 500
+const TITLE_DIGEST_CHARS = 4000;
+const TITLE_MESSAGE_CHARS = 500;
 /** 模型偶尔会带引号或解释，标题本身限制在 60 字内（只影响标题，不涉及消息内容） */
-const TITLE_MAX_CHARS = 60
+const TITLE_MAX_CHARS = 60;
 
-const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max)}…`)
+const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max)}…`);
 
 const messageText = (message: Message) => {
-  if (message.role === 'user') {
-    return message.content.trim()
+  if (message.role === "user") {
+    return message.content.trim();
   }
   return message.blocks
-    .filter((block) => block.type === 'text')
+    .filter((block) => block.type === "text")
     .map((block) => block.text)
-    .join('\n')
-    .trim()
-}
+    .join("\n")
+    .trim();
+};
 
 /** 截取对话摘要：保留首条与最近的若干条，中间不再发送 */
 const buildTitleDigest = (messages: Message[]): string => {
   const lines = messages.flatMap((message) => {
-    const text = messageText(message)
+    const text = messageText(message);
     if (!text) {
-      return []
+      return [];
     }
-    const speaker = message.role === 'user' ? '用户' : '助手'
-    return [`${speaker}：${clip(text.replace(/\s+/g, ' '), TITLE_MESSAGE_CHARS)}`]
-  })
+    const speaker = message.role === "user" ? "用户" : "助手";
+    return [`${speaker}：${clip(text.replace(/\s+/g, " "), TITLE_MESSAGE_CHARS)}`];
+  });
   if (lines.length === 0) {
-    return ''
+    return "";
   }
-  const [first, ...rest] = lines
-  const picked: string[] = []
-  let used = first.length
+  const [first, ...rest] = lines;
+  const picked: string[] = [];
+  let used = first.length;
   for (let index = rest.length - 1; index >= 0; index -= 1) {
     if (used + rest[index].length > TITLE_DIGEST_CHARS) {
-      break
+      break;
     }
-    picked.unshift(rest[index])
-    used += rest[index].length
+    picked.unshift(rest[index]);
+    used += rest[index].length;
   }
-  return [first, ...picked].join('\n\n')
-}
+  return [first, ...picked].join("\n\n");
+};
 
 const cleanTitle = (raw: string) => {
   const text = raw
-    .replace(/^\s*(标题|title)\s*[:：]\s*/i, '')
+    .replace(/^\s*(标题|title)\s*[:：]\s*/i, "")
     // 去掉模型偶尔加上的 Markdown 标记
-    .replace(/[*_`#>]+/g, '')
-    .replace(/^["'“”‘’《》\s]+|["'“”‘’《》\s]+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return text.length > TITLE_MAX_CHARS ? `${text.slice(0, TITLE_MAX_CHARS)}…` : text
-}
+    .replace(/[*_`#>]+/g, "")
+    .replace(/^["'“”‘’《》\s]+|["'“”‘’《》\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > TITLE_MAX_CHARS ? `${text.slice(0, TITLE_MAX_CHARS)}…` : text;
+};
 
 /** 设置里指定了命名模型就用它；没配、或该模型已被删除时跟随当前选择 */
 const resolveTitleSelection = () => {
-  const { titleModelKey } = useSettings.getState()
-  const at = titleModelKey.indexOf('::')
+  const { titleModelKey } = useSettings.getState();
+  const at = titleModelKey.indexOf("::");
   if (at !== -1) {
-    const selection = resolveSelection(titleModelKey.slice(0, at), titleModelKey.slice(at + 2))
+    const selection = resolveSelection(titleModelKey.slice(0, at), titleModelKey.slice(at + 2));
     if (selection) {
-      return selection
+      return selection;
     }
   }
-  return getActiveSelection()
-}
+  return getActiveSelection();
+};
 
 /**
  * 用所选模型给会话生成标题：只发截取后的对话摘要，收齐流式文本后取标题。
@@ -578,133 +603,133 @@ const resolveTitleSelection = () => {
  */
 export const generateTitleWithAi = async (
   sessionId: string,
-  options?: { onlyIfTitle?: string }
+  options?: { onlyIfTitle?: string },
 ): Promise<boolean> => {
   if (get().naming[sessionId] || get().importingHistory || deletingSessions.has(sessionId)) {
-    return false
+    return false;
   }
-  const controller = new AbortController()
-  set((state) => ({ naming: { ...state.naming, [sessionId]: true } }))
+  const controller = new AbortController();
+  set((state) => ({ naming: { ...state.naming, [sessionId]: true } }));
   try {
     // 侧边栏可能对未打开的会话发起命名，先按需加载详情
-    await ensureSessionLoaded(sessionId)
-    const session = getSession(sessionId)
-    const selection = resolveTitleSelection()
+    await ensureSessionLoaded(sessionId);
+    const session = getSession(sessionId);
+    const selection = resolveTitleSelection();
     if (!session || !selection) {
-      return false
+      return false;
     }
-    const digest = buildTitleDigest(getVisibleMessages(session))
+    const digest = buildTitleDigest(getVisibleMessages(session));
     if (!digest) {
-      return false
+      return false;
     }
     const events = streamChat(
       selection.provider,
       selection.model.id,
       {
-        system: translate('aiTitleSystemPrompt'),
-        messages: [{ role: 'user', content: digest }],
+        system: translate("aiTitleSystemPrompt"),
+        messages: [{ role: "user", content: digest }],
         thinking: false,
         search: false,
         // 思考模型会先把额度用在推理上，给太小会只剩空正文
         maxTokens: 1024,
       },
-      controller.signal
-    )
-    let raw = ''
+      controller.signal,
+    );
+    let raw = "";
     for await (const event of events) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        raw += event.delta.text
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        raw += event.delta.text;
       }
     }
-    const title = cleanTitle(raw)
+    const title = cleanTitle(raw);
     if (!title) {
-      return false
+      return false;
     }
     // 自动命名期间用户手动改过标题，放弃覆盖
     if (
       options?.onlyIfTitle !== undefined &&
       getSession(sessionId)?.title !== options.onlyIfTitle
     ) {
-      return false
+      return false;
     }
-    updateSession(sessionId, (current) => ({ ...current, title }))
-    persist(sessionId)
-    return true
+    updateSession(sessionId, (current) => ({ ...current, title }));
+    persist(sessionId);
+    emitLocalMutation({ type: "session-renamed", sessionId, title, updatedAt: Date.now() });
+    return true;
   } catch {
     // 不打断用户操作，失败提示由调用方展示
-    return false
+    return false;
   } finally {
     set((state) => ({
-      naming: Object.fromEntries(
-        Object.entries(state.naming).filter(([id]) => id !== sessionId)
-      ),
-    }))
+      naming: Object.fromEntries(Object.entries(state.naming).filter(([id]) => id !== sessionId)),
+    }));
   }
-}
+};
 
 /**
  * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
  * 同一服务端文件可能被多个会话引用，不维护引用计数。
  */
 export const removeSession = (id: string): Promise<boolean> => {
-  const task = removeSessionData(id).finally(() => deletionTasks.delete(task))
-  deletionTasks.add(task)
-  return task
-}
+  const task = removeSessionData(id).finally(() => deletionTasks.delete(task));
+  deletionTasks.add(task);
+  return task;
+};
 
 const removeSessionData = async (id: string): Promise<boolean> => {
   if (get().importingHistory || deletingSessions.has(id)) {
-    return false
+    return false;
   }
-  const epoch = historyEpoch
-  deletingSessions.add(id)
+  const epoch = historyEpoch;
+  deletingSessions.add(id);
   try {
-    getStreamController(id)?.abort()
+    getStreamController(id)?.abort();
     // 等本会话的流收尾，避免删除之后又被收尾保存写回来。
-    await waitForIdle(id)
+    await waitForIdle(id);
     if (epoch !== historyEpoch) {
-      return false
+      return false;
     }
-    await db.deleteSession(id)
+    await db.deleteSession(id);
     if (epoch !== historyEpoch) {
-      return true
+      return true;
     }
-    sessionLoads.delete(id)
-    sessionAccess.delete(id)
-    unsavedSessions.delete(id)
-    pendingFiles.delete(id)
-    clearDraft(id)
+    sessionLoads.delete(id);
+    sessionAccess.delete(id);
+    unsavedSessions.delete(id);
+    pendingFiles.delete(id);
+    clearDraft(id);
     set((state) => ({
       sessions: state.sessions.filter((session) => session.id !== id),
       sessionCache: Object.fromEntries(
-        Object.entries(state.sessionCache).filter(([key]) => key !== id)
+        Object.entries(state.sessionCache).filter(([key]) => key !== id),
       ),
       sessionLoadErrors: Object.fromEntries(
-        Object.entries(state.sessionLoadErrors).filter(([key]) => key !== id)
+        Object.entries(state.sessionLoadErrors).filter(([key]) => key !== id),
       ),
       sessionSaveErrors: Object.fromEntries(
-        Object.entries(state.sessionSaveErrors).filter(([key]) => key !== id)
+        Object.entries(state.sessionSaveErrors).filter(([key]) => key !== id),
       ),
       activeId: state.activeId === id ? null : state.activeId,
-    }))
-    return true
+    }));
+    emitLocalMutation({ type: "session-deleted", sessionId: id, deletedAt: Date.now() });
+    return true;
   } catch (error) {
-    db.reportStorageError('delete session')(error)
-    return false
+    db.reportStorageError("delete session")(error);
+    return false;
   } finally {
-    deletingSessions.delete(id)
+    deletingSessions.delete(id);
     // 删除失败时保留会话，并保存停止生成后的最新状态。
     if (getSession(id)) {
       if (get().importingHistory) {
-        unsavedSessions.add(id)
+        unsavedSessions.add(id);
       } else {
-        persist(id)
+        persist(id);
       }
     }
   }
-}
+};
 
-export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
+export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort();
 
 /**
  * 提交指定会话的最新草稿；null 表示新建会话。
@@ -712,46 +737,46 @@ export const stopReply = (sessionId: string) => getStreamController(sessionId)?.
  */
 export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
-    return false
+    return false;
   }
-  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
+  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks);
   if (!prepared) {
-    return false
+    return false;
   }
-  const { text, files } = prepared
-  const now = Date.now()
-  let sessionId = targetSessionId
+  const { text, files } = prepared;
+  const now = Date.now();
+  let sessionId = targetSessionId;
   if (
     sessionId !== null &&
     (deletingSessions.has(sessionId) || getStreamController(sessionId) || !getSession(sessionId))
   ) {
-    return false
+    return false;
   }
   if (sessionId === null) {
     const session: Session = {
       id: createId(),
-      title: '',
+      title: "",
       createdAt: now,
       updatedAt: now,
       messages: [],
       rootMessageId: null,
-    }
-    sessionId = session.id
-    touchSession(session.id)
+    };
+    sessionId = session.id;
+    touchSession(session.id);
     set((state) => ({
       sessions: [toSessionSummary(session), ...state.sessions],
       sessionCache: { ...state.sessionCache, [session.id]: session },
       activeId: session.id,
-    }))
+    }));
   }
-  const current = getSession(sessionId)
+  const current = getSession(sessionId);
   if (!current) {
-    return false
+    return false;
   }
-  const history = getVisibleMessages(current)
+  const history = getVisibleMessages(current);
   const question: UserMessage = {
     id: createId(),
-    role: 'user',
+    role: "user",
     content: text,
     files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
       id,
@@ -762,190 +787,202 @@ export const sendMessage = (targetSessionId: string | null) => {
       mimeType,
     })),
     createdAt: now,
-  }
-  const reply = createReply()
+  };
+  const reply = createReply();
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
     updatedAt: now,
-  }))
+  }));
   if (files.length > 0) {
     pendingFiles.set(sessionId, [
       ...(pendingFiles.get(sessionId) ?? []),
       ...files.map(({ id, blob }) => ({ id, blob })),
-    ])
+    ]);
     // 请求可能在 saveSession 完成前就开始读原件，先放进内存兜底
-    files.forEach(({ id, blob }) => recentBlobs.set(id, blob))
+    files.forEach(({ id, blob }) => recentBlobs.set(id, blob));
   }
-  persist(sessionId)
-  clearSentDraft(targetSessionId)
-  void streamReply(sessionId, reply, { history, question })
-  return true
-}
+  persist(sessionId);
+  clearSentDraft(targetSessionId);
+  emitLocalMutation({ type: "session-saved", sessionId });
+  void streamReply(sessionId, reply, { history, question });
+  return true;
+};
 
 /** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话。 */
 export const regenerateReply = (sessionId: string, messageId?: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
-    return
+    return;
   }
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (!session || getStreamController(sessionId)) {
-    return
+    return;
   }
-  const path = getVisibleMessages(session)
+  const path = getVisibleMessages(session);
   const index =
-    messageId === undefined ? path.length - 1 : path.findIndex((m) => m.id === messageId)
-  const question = path[index - 1]
-  if (question?.role !== 'user' || path[index]?.role !== 'assistant') {
-    return
+    messageId === undefined ? path.length - 1 : path.findIndex((m) => m.id === messageId);
+  const question = path[index - 1];
+  if (question?.role !== "user" || path[index]?.role !== "assistant") {
+    return;
   }
-  const history = path.slice(0, index - 1)
-  const reply = createReply()
+  const history = path.slice(0, index - 1);
+  const reply = createReply();
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
-  }))
-  persist(sessionId)
-  void streamReply(sessionId, reply, { history, question })
-}
+  }));
+  persist(sessionId);
+  void streamReply(sessionId, reply, { history, question });
+};
 
 /** 编辑提问后新增同父版本，保留原文件；旧问题的所有回答与后续对话仍可切回。 */
 export const editMessage = (sessionId: string, messageId: string, content: string): boolean => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
-    return false
+    return false;
   }
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (!session || getStreamController(sessionId)) {
-    return false
+    return false;
   }
-  const path = getVisibleMessages(session)
-  const index = path.findIndex((message) => message.id === messageId)
-  const previous = path[index]
-  const text = content.trim()
-  if (previous?.role !== 'user' || (!text && previous.files.length === 0)) {
-    return false
+  const path = getVisibleMessages(session);
+  const index = path.findIndex((message) => message.id === messageId);
+  const previous = path[index];
+  const text = content.trim();
+  if (previous?.role !== "user" || (!text && previous.files.length === 0)) {
+    return false;
   }
   const question: UserMessage = {
     id: createId(),
-    role: 'user',
+    role: "user",
     content: text,
     files: previous.files,
     createdAt: Date.now(),
-  }
-  const reply = createReply()
+  };
+  const reply = createReply();
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, path[index - 1]?.id ?? null, [question, reply]),
     updatedAt: Date.now(),
-  }))
-  persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, index), question })
-  return true
-}
+  }));
+  const title = event.delta.title.trim();
+  updateSession(sessionId, (session) => (session.title ? session : { ...session, title }));
+  titleRequests.delete(controller);
+  emitLocalMutation({
+    type: "session-renamed",
+    sessionId,
+    title,
+    updatedAt: Date.now(),
+  });
+};
 
 export const selectMessageVersion = (sessionId: string, messageId: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
-    return
+    return;
   }
   if (getStreamController(sessionId)) {
-    return
+    return;
   }
-  updateSession(sessionId, (session) => selectVersion(session, messageId))
-  persist(sessionId)
-}
+  updateSession(sessionId, (session) => selectVersion(session, messageId));
+  persist(sessionId);
+};
 
 /** 继续最后一条未完成的回答：保留原消息与开关，仅将新流的内容追加到原块之后。 */
 export const continueReply = (sessionId: string, messageId: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
-    return
+    return;
   }
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (!session || getStreamController(sessionId)) {
-    return
+    return;
   }
-  const path = getVisibleMessages(session)
-  const question = path.at(-2)
-  const previous = path.at(-1)
+  const path = getVisibleMessages(session);
+  const question = path.at(-2);
+  const previous = path.at(-1);
   if (
-    question?.role !== 'user' ||
-    previous?.role !== 'assistant' ||
+    question?.role !== "user" ||
+    previous?.role !== "assistant" ||
     previous.id !== messageId ||
     !canContinueReply(previous)
   ) {
-    return
+    return;
   }
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search } = useSettings.getState();
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用当前选择。
     model: previous.model ?? getActiveSelection()?.model.id ?? null,
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
-    status: 'pending',
+    status: "pending",
     // 续写是新一轮请求，用时按这一轮重新计
     finishedAt: undefined,
     stopReason: undefined,
     stopDetails: undefined,
     error: undefined,
-  }
-  updateReply(sessionId, reply)
-  updateSession(sessionId, (s) => ({ ...s, updatedAt: Date.now() }))
-  persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, -2), question, prefix: previous })
-}
+  };
+  updateReply(sessionId, reply);
+  updateSession(sessionId, (s) => ({ ...s, updatedAt: Date.now() }));
+  persist(sessionId);
+  void streamReply(sessionId, reply, { history: path.slice(0, -2), question, prefix: previous });
+};
 
 /** 附件补传失败后重试：保留原回答位置，重新补传并请求 */
 export const retryUpload = (sessionId: string, messageId: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
-    return
+    return;
   }
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (!session || getStreamController(sessionId)) {
-    return
+    return;
   }
-  const path = getVisibleMessages(session)
-  const index = path.findIndex((message) => message.id === messageId)
-  const question = path[index - 1]
-  const previous = path[index]
+  const path = getVisibleMessages(session);
+  const index = path.findIndex((message) => message.id === messageId);
+  const question = path[index - 1];
+  const previous = path[index];
   if (
-    question?.role !== 'user' ||
-    previous?.role !== 'assistant' ||
-    previous.error?.kind !== 'upload'
+    question?.role !== "user" ||
+    previous?.role !== "assistant" ||
+    previous.error?.kind !== "upload"
   ) {
-    return
+    return;
   }
-  const reply: AssistantMessage = { ...previous, status: 'pending', finishedAt: undefined, error: undefined }
-  updateReply(sessionId, reply)
-  persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, index - 1), question })
-}
+  const reply: AssistantMessage = {
+    ...previous,
+    status: "pending",
+    finishedAt: undefined,
+    error: undefined,
+  };
+  updateReply(sessionId, reply);
+  persist(sessionId);
+  void streamReply(sessionId, reply, { history: path.slice(0, index - 1), question });
+};
 
-type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage }
+type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage };
 
 /** 附件补齐后的请求：内联模式带回读出的原件内容，filesApi 模式只改 serverId */
-type PreparedRequest = { request: Request; attachments: RequestAttachments }
+type PreparedRequest = { request: Request; attachments: RequestAttachments };
 
 /** 附件原件的读取入口：刚发送的走内存，其余回落到 IndexedDB */
-const loadAttachmentBlob = async (id: string) => recentBlobs.get(id) ?? db.loadFile(id)
+const loadAttachmentBlob = async (id: string) => recentBlobs.get(id) ?? db.loadFile(id);
 
 /** 把补传得到的 serverId 写回会话里所有引用同一附件的消息（编辑、重新生成会共用附件） */
 const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
   if (serverIds.size === 0) {
-    return
+    return;
   }
   updateSession(sessionId, (session) => ({
     ...session,
     messages: session.messages.map((message) =>
-      message.role === 'user' && message.files.some((file) => serverIds.has(file.id))
+      message.role === "user" && message.files.some((file) => serverIds.has(file.id))
         ? {
             ...message,
             files: message.files.map((file) =>
-              serverIds.has(file.id) ? { ...file, serverId: serverIds.get(file.id) ?? null } : file
+              serverIds.has(file.id) ? { ...file, serverId: serverIds.get(file.id) ?? null } : file,
             ),
           }
-        : message
+        : message,
     ),
-  }))
-  persist(sessionId)
-}
+  }));
+  persist(sessionId);
+};
 
 /**
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
@@ -953,37 +990,37 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
  */
 const ensureServerId = async (
   provider: ProviderConfig,
-  file: FileAttachment
+  file: FileAttachment,
 ): Promise<string | null> => {
   if (file.serverId) {
-    return file.serverId
+    return file.serverId;
   }
-  const task = useUploads.getState().tasks[file.id]
-  if (task?.status === 'done') {
-    return task.serverId
+  const task = useUploads.getState().tasks[file.id];
+  if (task?.status === "done") {
+    return task.serverId;
   }
-  const blob = await db.loadFile(file.id)
+  const blob = await db.loadFile(file.id);
   if (!blob) {
-    return null
+    return null;
   }
-  return uploadAttachment(provider, file.id, blob, file.name, file.isImage)
-}
+  return uploadAttachment(provider, file.id, blob, file.name, file.isImage);
+};
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
 const refreshRequest = (sessionId: string, request: Request): Request => {
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   if (!session) {
-    return request
+    return request;
   }
-  const byId = new Map(session.messages.map((message) => [message.id, message]))
+  const byId = new Map(session.messages.map((message) => [message.id, message]));
   const pick = <T extends Message>(message: T): T =>
-    (byId.get(message.id) as T | undefined) ?? message
+    (byId.get(message.id) as T | undefined) ?? message;
   return {
     history: request.history.map(pick),
     question: pick(request.question),
     prefix: request.prefix,
-  }
-}
+  };
+};
 
 /**
  * filesApi 模式：发送前补齐附件的 serverId。
@@ -995,67 +1032,67 @@ const prepareServerFiles = async (
   sessionId: string,
   request: Request,
   provider: ProviderConfig,
-  signal: AbortSignal
+  signal: AbortSignal,
 ) => {
-  const epoch = historyEpoch
+  const epoch = historyEpoch;
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
-  request = refreshRequest(sessionId, request)
-  const serverIds = new Map<string, string>()
+  request = refreshRequest(sessionId, request);
+  const serverIds = new Map<string, string>();
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-  })
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(provider, file)
+      const serverId = await ensureServerId(provider, file);
       if (serverId) {
-        serverIds.set(file.id, serverId)
+        serverIds.set(file.id, serverId);
       }
-    })
-  )
+    }),
+  );
   void uploads.then(() => {
     if (epoch === historyEpoch) {
-      saveServerIds(sessionId, serverIds)
+      saveServerIds(sessionId, serverIds);
     }
-  })
-  const results = await Promise.race([uploads, aborted])
-  const failed = results.find((result) => result.status === 'rejected')
+  });
+  const results = await Promise.race([uploads, aborted]);
+  const failed = results.find((result) => result.status === "rejected");
   if (failed) {
-    throw failed.reason
+    throw failed.reason;
   }
 
-  const pending = new Map<string, FileAttachment>()
+  const pending = new Map<string, FileAttachment>();
   for (const [user] of getContextRounds(request.history).toReversed()) {
     for (const file of user.files) {
       if (!file.serverId && !serverIds.has(file.id) && !pending.has(file.id)) {
-        pending.set(file.id, file)
+        pending.set(file.id, file);
       }
     }
   }
   for (const file of pending.values()) {
-    signal.throwIfAborted()
+    signal.throwIfAborted();
     try {
-      const serverId = await Promise.race([ensureServerId(provider, file), aborted])
+      const serverId = await Promise.race([ensureServerId(provider, file), aborted]);
       if (serverId) {
-        serverIds.set(file.id, serverId)
-        saveServerIds(sessionId, new Map([[file.id, serverId]]))
+        serverIds.set(file.id, serverId);
+        saveServerIds(sessionId, new Map([[file.id, serverId]]));
       }
     } catch {
-      signal.throwIfAborted()
+      signal.throwIfAborted();
     }
   }
 
   // 用补齐后的会话重新取历史与提问，保证请求里都是 serverId
-  const session = getSession(sessionId)
+  const session = getSession(sessionId);
   const resolve = <T extends Message>(message: T): T =>
-    (session?.messages.find((m) => m.id === message.id) as T | undefined) ?? message
+    (session?.messages.find((m) => m.id === message.id) as T | undefined) ?? message;
   return {
     history: request.history.map(resolve),
     question: resolve(request.question),
     prefix: request.prefix,
-  }
-}
+  };
+};
 
 /**
  * 内联模式（默认）：把本次请求用到的原件读成 base64 / 文本，不依赖任何服务端文件接口。
@@ -1066,47 +1103,47 @@ const resolveInlineAttachments = async (
   request: Request,
   provider: ProviderConfig,
   model: ModelConfig,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<RequestAttachments> => {
-  const capabilities = getModelCapabilities(provider, model)
+  const capabilities = getModelCapabilities(provider, model);
   // 模型名识别不出视觉能力时，设置里允许强制放行，避免逐个模型配置
-  const imageAllowed = capabilities.vision || useSettings.getState().forceVision
-  const current = new Set(request.question.files.map((file) => file.id))
-  if (capabilities.files === 'none') {
+  const imageAllowed = capabilities.vision || useSettings.getState().forceVision;
+  const current = new Set(request.question.files.map((file) => file.id));
+  if (capabilities.files === "none") {
     if (current.size > 0) {
-      throw new ApiError('protocol', { key: 'replyAttachmentUnsupported' })
+      throw new ApiError("protocol", { key: "replyAttachmentUnsupported" });
     }
-    return new Map()
+    return new Map();
   }
   // 同一附件可能被多轮消息引用（编辑、重新生成），按 id 去重后只读一次
-  const files = new Map<string, FileAttachment>()
+  const files = new Map<string, FileAttachment>();
   for (const [user] of getContextRounds(request.history)) {
-    user.files.forEach((file) => files.set(file.id, file))
+    user.files.forEach((file) => files.set(file.id, file));
   }
-  request.question.files.forEach((file) => files.set(file.id, file))
+  request.question.files.forEach((file) => files.set(file.id, file));
 
-  const attachments: RequestAttachments = new Map()
+  const attachments: RequestAttachments = new Map();
   for (const file of files.values()) {
-    signal.throwIfAborted()
-    const kind = getAttachmentKind(file.name, file.mimeType)
-    if (kind === 'document' || (kind === 'image' && !imageAllowed)) {
+    signal.throwIfAborted();
+    const kind = getAttachmentKind(file.name, file.mimeType);
+    if (kind === "document" || (kind === "image" && !imageAllowed)) {
       if (current.has(file.id)) {
-        throw new ApiError('protocol', {
-          key: kind === 'document' ? 'replyAttachmentUnsupported' : 'replyImageUnsupported',
-        })
+        throw new ApiError("protocol", {
+          key: kind === "document" ? "replyAttachmentUnsupported" : "replyImageUnsupported",
+        });
       }
-      continue
+      continue;
     }
-    const blob = await loadAttachmentBlob(file.id)
-    const inline = blob ? await toInlineAttachment(file, blob) : null
+    const blob = await loadAttachmentBlob(file.id);
+    const inline = blob ? await toInlineAttachment(file, blob) : null;
     if (inline) {
-      attachments.set(file.id, inline)
+      attachments.set(file.id, inline);
     } else if (current.has(file.id)) {
-      throw new ApiError('protocol', { key: 'replyAttachmentMissing' })
+      throw new ApiError("protocol", { key: "replyAttachmentMissing" });
     }
   }
-  return attachments
-}
+  return attachments;
+};
 
 /**
  * 附件准备按服务商能力分派：声明了 filesApi 的（目前为 DeepSeek）继续走服务端文件接口，
@@ -1117,31 +1154,31 @@ const prepareFiles = async (
   request: Request,
   provider: ProviderConfig,
   model: ModelConfig,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<PreparedRequest> =>
   provider.features?.filesApi
     ? {
         request: await prepareServerFiles(sessionId, request, provider, signal),
         attachments: new Map(),
       }
-    : { request, attachments: await resolveInlineAttachments(request, provider, model, signal) }
+    : { request, attachments: await resolveInlineAttachments(request, provider, model, signal) };
 
 /** 本次请求实际会用到的服务端 file_id */
 const collectServerFileIds = (request: Request): Set<string> => {
-  const ids = new Set<string>()
+  const ids = new Set<string>();
   const add = (files: FileAttachment[]) => {
     for (const file of files) {
       if (file.serverId) {
-        ids.add(file.serverId)
+        ids.add(file.serverId);
       }
     }
-  }
-  add(request.question.files)
+  };
+  add(request.question.files);
   for (const [user] of getContextRounds(request.history)) {
-    add(user.files)
+    add(user.files);
   }
-  return ids
-}
+  return ids;
+};
 
 /**
  * 服务端判定 file_id 失效时，清掉对应附件的 serverId 并丢弃旧的上传任务，
@@ -1150,60 +1187,60 @@ const collectServerFileIds = (request: Request): Set<string> => {
  */
 const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: unknown): boolean => {
   if (!(error instanceof ApiError) || !getFileErrorCode(error)) {
-    return false
+    return false;
   }
-  const mentioned = extractFileIds(error.message)
+  const mentioned = extractFileIds(error.message);
   // 重试时原始快照里还是上一轮已被清掉的 serverId，先换成会话里的最新消息
   const targets =
     mentioned.length > 0
       ? new Set(mentioned)
-      : collectServerFileIds(refreshRequest(sessionId, request))
-  const session = getSession(sessionId)
+      : collectServerFileIds(refreshRequest(sessionId, request));
+  const session = getSession(sessionId);
   if (targets.size === 0 || !session) {
-    return false
+    return false;
   }
-  const localIds: string[] = []
+  const localIds: string[] = [];
   const messages = session.messages.map((message) => {
-    if (message.role !== 'user') {
-      return message
+    if (message.role !== "user") {
+      return message;
     }
-    let changed = false
+    let changed = false;
     const files = message.files.map((file) => {
       if (!file.serverId || !targets.has(file.serverId)) {
-        return file
+        return file;
       }
-      localIds.push(file.id)
-      changed = true
-      return { ...file, serverId: null }
-    })
-    return changed ? { ...message, files } : message
-  })
+      localIds.push(file.id);
+      changed = true;
+      return { ...file, serverId: null };
+    });
+    return changed ? { ...message, files } : message;
+  });
   if (localIds.length === 0) {
-    return false
+    return false;
   }
-  updateSession(sessionId, (current) => ({ ...current, messages }))
+  updateSession(sessionId, (current) => ({ ...current, messages }));
   // 上传任务里可能还留着同一个失效的 serverId，清掉后 ensureServerId 才会重新上传
-  localIds.forEach(cancelUpload)
-  persist(sessionId)
-  return true
-}
+  localIds.forEach(cancelUpload);
+  persist(sessionId);
+  return true;
+};
 
 /** 重传前的退避等待；停止生成时立即返回，由调用方按已停止收尾 */
 const waitForRetry = (attempt: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
     function onAbort() {
-      clearTimeout(timer)
-      resolve()
+      clearTimeout(timer);
+      resolve();
     }
     const timer = setTimeout(
       () => {
-        signal.removeEventListener('abort', onAbort)
-        resolve()
+        signal.removeEventListener("abort", onAbort);
+        resolve();
       },
-      FILE_RETRY_BASE_DELAY * 2 ** attempt
-    )
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
+      FILE_RETRY_BASE_DELAY * 2 ** attempt,
+    );
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 
 /**
  * 请求并消费流：先补齐附件的 serverId，再发请求；流式增量按动画帧刷新内存，完成、失败或停止后落盘。
@@ -1211,51 +1248,51 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  * 服务端判定 file_id 失效时重新补传后重发，退避重试且次数有上限，超过则按原始报错收尾。
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
-  const controller = new AbortController()
+  const controller = new AbortController();
   if (!getSession(sessionId)?.title) {
-    titleRequests.add(controller)
+    titleRequests.add(controller);
   }
-  set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
-  let reply = initial
-  let frame = 0
+  set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }));
+  let reply = initial;
+  let frame = 0;
   const flush = () => {
-    cancelAnimationFrame(frame)
-    frame = 0
-    updateReply(sessionId, reply)
-  }
-  streamFlushes.set(sessionId, flush)
+    cancelAnimationFrame(frame);
+    frame = 0;
+    updateReply(sessionId, reply);
+  };
+  streamFlushes.set(sessionId, flush);
 
   try {
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
-      let preparing = true
-      let receivedContent = false
+      let preparing = true;
+      let receivedContent = false;
       try {
-        const selection = resolveSelection(initial.providerId, initial.model)
+        const selection = resolveSelection(initial.providerId, initial.model);
         if (!selection) {
-          throw new ApiError('protocol', { key: 'replyNoProvider' })
+          throw new ApiError("protocol", { key: "replyNoProvider" });
         }
-        const { provider, model } = selection
-        const prepared = await prepareFiles(sessionId, request, provider, model, controller.signal)
-        preparing = false
+        const { provider, model } = selection;
+        const prepared = await prepareFiles(sessionId, request, provider, model, controller.signal);
+        preparing = false;
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.request.prefix
           ? prepared.request.prefix.latestReminder
           : provider.features?.latestReminder
             ? createLatestReminder(useSettings.getState())
-            : undefined
+            : undefined;
         // 记录实际使用的服务商与模型，供回答统计与会话回看展示
-        reply = { ...reply, providerId: provider.id, model: model.id, latestReminder }
-        updateReply(sessionId, reply)
-        persist(sessionId)
+        reply = { ...reply, providerId: provider.id, model: model.id, latestReminder };
+        updateReply(sessionId, reply);
+        persist(sessionId);
         const messages = toRequestMessages(
           prepared.request.history,
           prepared.request.question,
           prepared.attachments,
           prepared.request.prefix,
           initial.thinking ?? false,
-          latestReminder
-        )
+          latestReminder,
+        );
         const events = streamChat(
           provider,
           model.id,
@@ -1266,61 +1303,73 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             search: initial.search ?? false,
             title: titleRequests.has(controller) && provider.features?.serverTitle === true,
           },
-          controller.signal
-        )
-        const blockIndexes = new Map<number, number>()
+          controller.signal,
+        );
+        const blockIndexes = new Map<number, number>();
         for await (const event of events) {
-          receivedContent ||= event.type === 'content_block_start'
+          receivedContent ||= event.type === "content_block_start";
           if (
-            event.type === 'message_delta' &&
-            (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
+            event.type === "message_delta" &&
+            (event.delta.stop_reason === "end_turn" || event.delta.stop_reason === "max_tokens") &&
             event.delta.title?.trim() &&
             titleRequests.has(controller) &&
             !controller.signal.aborted &&
             !get().importingHistory
           ) {
-            const title = event.delta.title.trim()
-            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
-            titleRequests.delete(controller)
+            const title = event.delta.title.trim();
+            updateSession(sessionId, (session) =>
+              session.title ? session : { ...session, title },
+            );
+            titleRequests.delete(controller);
           }
-          reply = applyEvent(reply, event, Date.now(), blockIndexes)
-          if (document.visibilityState === 'hidden') {
-            flush()
+          reply = applyEvent(reply, event, Date.now(), blockIndexes);
+          if (document.visibilityState === "hidden") {
+            flush();
           } else {
-            frame ||= requestAnimationFrame(flush)
+            frame ||= requestAnimationFrame(flush);
           }
         }
-        reply = settleReply(reply, 'done', Date.now())
+        reply = settleReply(reply, "done", Date.now());
         // 服务端标题优先；没拿到时先落首条提问兜底，再用命名模型自动生成
-        if (titleRequests.has(controller) && !controller.signal.aborted && !get().importingHistory) {
-          const fallback = createLocalTitle(prepared.request.question.content)
-          const titled = Boolean(getSession(sessionId)?.title)
+        if (
+          titleRequests.has(controller) &&
+          !controller.signal.aborted &&
+          !get().importingHistory
+        ) {
+          const fallback = createLocalTitle(prepared.request.question.content);
+          const titled = Boolean(getSession(sessionId)?.title);
           if (!titled && fallback) {
             updateSession(sessionId, (session) =>
-              session.title ? session : { ...session, title: fallback }
-            )
+              session.title ? session : { ...session, title: fallback },
+            );
+            emitLocalMutation({
+              type: "session-renamed",
+              sessionId,
+              title: fallback,
+              updatedAt: Date.now(),
+            });
             // 后台生成；期间用户手动改名则放弃覆盖
-            void generateTitleWithAi(sessionId, { onlyIfTitle: fallback })
+            void generateTitleWithAi(sessionId, { onlyIfTitle: fallback });
           }
-          titleRequests.delete(controller)
+          titleRequests.delete(controller);
         }
-        break
+        break;
       } catch (error) {
         if (controller.signal.aborted) {
-          reply = settleReply(reply, 'stopped', Date.now())
-          break
+          reply = settleReply(reply, "stopped", Date.now());
+          break;
         }
         if (preparing) {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'upload',
-            message: '',
+          reply = settleReply(reply, "error", Date.now(), {
+            kind: "upload",
+            message: "",
             localMessage:
               error instanceof ApiError && error.localMessage
                 ? error.localMessage
                 : describeUploadError(error),
             retryable: isRetryableApiError(error),
-          })
-          break
+          });
+          break;
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (
@@ -1328,42 +1377,128 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           !receivedContent &&
           reuploadInvalidatedFiles(sessionId, request, error)
         ) {
-          await waitForRetry(attempt, controller.signal)
+          await waitForRetry(attempt, controller.signal);
           if (controller.signal.aborted) {
-            reply = settleReply(reply, 'stopped', Date.now())
-            break
+            reply = settleReply(reply, "stopped", Date.now());
+            break;
           }
-          continue
+          continue;
         }
-        if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
+        if (error instanceof ApiError && error.kind === "interrupted" && reply.stopReason) {
           // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
-          reply = settleReply(reply, 'done', Date.now())
+          reply = settleReply(reply, "done", Date.now());
         } else if (error instanceof ApiError) {
-          reply = settleReply(reply, 'error', Date.now(), {
+          reply = settleReply(reply, "error", Date.now(), {
             kind: error.kind,
             message: error.message,
             status: error.status,
             localMessage: error.localMessage,
-          })
+          });
         } else {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'protocol',
+          reply = settleReply(reply, "error", Date.now(), {
+            kind: "protocol",
             message: error instanceof Error ? error.message : String(error),
-          })
+          });
         }
-        break
+        break;
       }
     }
   } finally {
-    titleRequests.delete(controller)
-    streamFlushes.delete(sessionId)
-    cancelAnimationFrame(frame)
-    updateReply(sessionId, reply)
+    titleRequests.delete(controller);
+    streamFlushes.delete(sessionId);
+    cancelAnimationFrame(frame);
+    updateReply(sessionId, reply);
     set((state) => ({
       streaming: Object.fromEntries(
-        Object.entries(state.streaming).filter(([id]) => id !== sessionId)
+        Object.entries(state.streaming).filter(([id]) => id !== sessionId),
       ),
-    }))
-    persist(sessionId)
+    }));
+    persist(sessionId);
+    emitLocalMutation({ type: "session-saved", sessionId });
   }
-}
+};
+
+/** 读取已缓存在内存中的会话（不触发懒加载，供同步引擎合入前读取最新态） */
+export const getCachedSession = (sessionId: string): Session | undefined => getSession(sessionId);
+
+/** 若某会话正在流式生成，返回正在写入的回复 ID，避免同步合并覆盖进行中的流 */
+export const getStreamingReplyId = (sessionId: string): string | null => {
+  if (!getStreamController(sessionId)) {
+    return null;
+  }
+  const session = getSession(sessionId);
+  if (!session) {
+    return null;
+  }
+  const visible = getVisibleMessages(session);
+  const last = visible.at(-1);
+  return last &&
+    last.role === "assistant" &&
+    (last.status === "pending" || last.status === "streaming")
+    ? last.id
+    : null;
+};
+
+/**
+ * 同步引擎专用：将合并后的会话落盘并刷新列表；
+ * 仅更新已在内存缓存中或当前打开的会话，不撑爆 SESSION_CACHE_LIMIT，且不触发本地同步广播。
+ */
+export const applySyncedSession = async (session: Session): Promise<void> => {
+  if (get().importingHistory || deletingSessions.has(session.id)) {
+    return;
+  }
+  await db.saveSession(session);
+  if (get().importingHistory || deletingSessions.has(session.id)) {
+    return;
+  }
+  const summary = toSessionSummary(session);
+  set((state) => {
+    const exists = state.sessions.some((item) => item.id === session.id);
+    const nextSessions = exists
+      ? state.sessions.map((item) => (item.id === session.id ? summary : item))
+      : [summary, ...state.sessions];
+    const shouldUpdateCache =
+      Object.hasOwn(state.sessionCache, session.id) || state.activeId === session.id;
+    return {
+      sessions: sortSessions(nextSessions),
+      ...(shouldUpdateCache
+        ? { sessionCache: { ...state.sessionCache, [session.id]: session } }
+        : {}),
+    };
+  });
+};
+
+/**
+ * 同步引擎专用：按远端墓碑静默删除本地会话（正在流式生成的会话跳过，不触发回环广播）。
+ */
+export const applySyncedDeletion = async (sessionId: string): Promise<void> => {
+  if (
+    get().importingHistory ||
+    deletingSessions.has(sessionId) ||
+    Boolean(getStreamController(sessionId))
+  ) {
+    return;
+  }
+  await db.deleteSession(sessionId);
+  if (get().importingHistory) {
+    return;
+  }
+  sessionLoads.delete(sessionId);
+  sessionAccess.delete(sessionId);
+  unsavedSessions.delete(sessionId);
+  pendingFiles.delete(sessionId);
+  clearDraft(sessionId);
+  set((state) => ({
+    sessions: state.sessions.filter((item) => item.id !== sessionId),
+    sessionCache: Object.fromEntries(
+      Object.entries(state.sessionCache).filter(([key]) => key !== sessionId),
+    ),
+    sessionLoadErrors: Object.fromEntries(
+      Object.entries(state.sessionLoadErrors).filter(([key]) => key !== sessionId),
+    ),
+    sessionSaveErrors: Object.fromEntries(
+      Object.entries(state.sessionSaveErrors).filter(([key]) => key !== sessionId),
+    ),
+    activeId: state.activeId === sessionId ? null : state.activeId,
+  }));
+};
